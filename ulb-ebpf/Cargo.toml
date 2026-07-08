@@ -1,0 +1,17 @@
+[package]
+name = "ulb-ebpf"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+ulb-common = { path = "../ulb-common" }
+
+aya-ebpf = { workspace = true }
+aya-log-ebpf = { workspace = true }
+
+[build-dependencies]
+which = { workspace = true }
+
+[[bin]]
+name = "ulb"
+path = "src/main.rs"
