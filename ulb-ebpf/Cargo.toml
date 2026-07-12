@@ -3,11 +3,14 @@ name = "ulb-ebpf"
 version = "0.1.0"
 edition.workspace = true
 
+[features]
+default = []
+debug = ["dep:aya-log-ebpf", "ulb-common/debug"]
+
 [dependencies]
 ulb-common = { path = "../ulb-common" }
-
 aya-ebpf = { workspace = true }
-aya-log-ebpf = { workspace = true }
+aya-log-ebpf = { workspace = true, optional = true }
 
 [build-dependencies]
 which = { workspace = true }
