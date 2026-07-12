@@ -20,4 +20,5 @@ pub enum HttpParseError {
     InvalidMethod,
     InvalidUri,
     InvalidVersion,
+    Internal,
 }

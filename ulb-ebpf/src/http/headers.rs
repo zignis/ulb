@@ -31,7 +31,7 @@ pub fn parse_headers(ctx: &SkBuffContext, req: &mut HttpRequest) -> Result<u32, 
         }
 
         let hdr = &mut req.headers[i];
-        let consumed = parse_header(ctx, &data, req._offset as usize, hdr);
+        let consumed = parse_header(ctx, &data, req._offset as usize, hdr)?;
 
         // end of headers
         if consumed == 0 {
@@ -46,13 +46,18 @@ pub fn parse_headers(ctx: &SkBuffContext, req: &mut HttpRequest) -> Result<u32, 
 }
 
 #[inline(never)]
-fn parse_header(ctx: &SkBuffContext, data: &SkbData, offset: usize, hdr: &mut HttpHeader) -> u32 {
+fn parse_header(
+    ctx: &SkBuffContext,
+    data: &SkbData,
+    offset: usize,
+    hdr: &mut HttpHeader,
+) -> Result<u32, HttpParseError> {
     if offset > MAX_HEADERS_SIZE {
-        return 0;
+        return Ok(0);
     }
 
     match data.at(offset) {
-        Some(b'\r') | Some(b'\n') | None => return 0,
+        Some(b'\r') | Some(b'\n') | None => return Ok(0),
         _ => {}
     }
 
@@ -66,26 +71,28 @@ fn parse_header(ctx: &SkBuffContext, data: &SkbData, offset: usize, hdr: &mut Ht
                 break;
             }
             Some(_) => {}
-            None => return 0,
+            None => return Ok(0),
         }
     }
 
     if colon_pos == 0 {
-        return 0;
+        return Ok(0);
     }
 
-    hdr.key_len = colon_pos as u32;
-
-    unsafe {
+    if unsafe {
         bpf_skb_load_bytes(
             ctx.skb.skb as *const c_void,
             offset as u32,
             hdr.key.as_mut_ptr() as *mut c_void,
             colon_pos as u32,
-        );
+        )
+    } < 0
+    {
+        return Err(HttpParseError::Internal);
     }
 
     hdr.key[colon_pos] = 0;
+    hdr.key_len = colon_pos as u32;
 
     // value
     let mut value_len: usize = 0;
@@ -103,26 +110,28 @@ fn parse_header(ctx: &SkBuffContext, data: &SkbData, offset: usize, hdr: &mut Ht
                 break;
             }
             Some(_) => {}
-            None => return 0,
+            None => return Ok(0),
         }
     }
 
     if value_len == 0 {
-        return 0;
+        return Ok(0);
     }
 
-    hdr.value_len = value_len as u32;
-
-    unsafe {
+    if unsafe {
         bpf_skb_load_bytes(
             ctx.skb.skb as *const c_void,
             value_start as u32,
             hdr.value.as_mut_ptr() as *mut c_void,
             value_len as u32,
-        );
+        )
+    } < 0
+    {
+        return Err(HttpParseError::Internal);
     }
 
     hdr.value[value_len] = 0;
+    hdr.value_len = value_len as u32;
 
     #[cfg(feature = "debug")]
     unsafe {
@@ -132,5 +141,5 @@ fn parse_header(ctx: &SkBuffContext, data: &SkbData, offset: usize, hdr: &mut Ht
     let last_char = unsafe { data.at_unchecked(value_start + value_len) };
     let delimiter_size = 1 + (last_char == b'\r') as usize;
 
-    (value_start + value_len + delimiter_size - offset) as u32
+    Ok((value_start + value_len + delimiter_size - offset) as u32)
 }

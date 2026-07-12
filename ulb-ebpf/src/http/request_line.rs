@@ -123,7 +123,7 @@ pub fn parse_request_line(
         )
     } < 0
     {
-        return Err(HttpParseError::InvalidUri);
+        return Err(HttpParseError::Internal);
     }
 
     let version_start = uri_start + uri_len + 1;
