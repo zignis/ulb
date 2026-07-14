@@ -2,11 +2,15 @@
 
 #[cfg(feature = "debug")]
 use core::ffi::CStr;
+use core::ops::{
+    Deref,
+    DerefMut,
+};
 
 pub const HTTP_MAX_HEADERS: usize = 4;
-pub const HTTP_HDR_MAX_KEY_SIZE: usize = 32;
-pub const HTTP_HDR_MAX_VAL_SIZE: usize = 64;
-pub const HTTP_URI_SIZE: usize = 256;
+pub const HTTP_HDR_KEY_MAX_SIZE: usize = 32;
+pub const HTTP_HDR_VAL_MAX_SIZE: usize = 64;
+pub const HTTP_URI_MAX_SIZE: usize = 256;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -59,10 +63,8 @@ impl HttpVersion {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct HttpHeader {
-    pub key_len: u32,
-    pub key: [u8; HTTP_HDR_MAX_KEY_SIZE],
-    pub value_len: u32,
-    pub value: [u8; HTTP_HDR_MAX_VAL_SIZE],
+    pub key: BoundedStr<HTTP_HDR_KEY_MAX_SIZE>,
+    pub value: BoundedStr<HTTP_HDR_VAL_MAX_SIZE>,
 }
 
 #[repr(C)]
@@ -70,10 +72,30 @@ pub struct HttpHeader {
 pub struct HttpRequest {
     pub method: HttpMethod,
     pub version: HttpVersion,
-    pub uri_len: u32,
-    pub uri: [u8; HTTP_URI_SIZE],
+    pub uri: BoundedStr<HTTP_URI_MAX_SIZE>,
     pub headers: [HttpHeader; HTTP_MAX_HEADERS],
     // -- internal
     pub _offset: u32,    // read offset
     pub _hdr_count: u32, // number of parsed headers
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct BoundedStr<const MAX_SIZE: usize> {
+    pub len: u32,
+    pub data: [u8; MAX_SIZE],
+}
+
+impl<const MAX_SIZE: usize> Deref for BoundedStr<MAX_SIZE> {
+    type Target = [u8; MAX_SIZE];
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<const MAX_SIZE: usize> DerefMut for BoundedStr<MAX_SIZE> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
 }
