@@ -27,14 +27,32 @@ use http::{
     request_line::parse_request_line,
 };
 
-const MAX_SKB_SIZE: u32 = 4096;
+use crate::http::skb_data::SkbData;
+
+// -4 to keep loop iterations under verifier's 8192 jump limit
+const MAX_REQ_SCRATCH_SIZE: u32 = 8 * 1024 - 4; // around 8kb for req line and headers
 
 #[map]
 static CONN_MAP: SockMap = SockMap::with_max_entries(1024, 0);
 
 #[stream_parser]
 pub fn stream_parser(ctx: SkBuffContext) -> u32 {
-    ctx.len()
+    if unsafe { bpf_skb_pull_data(ctx.skb.skb, MAX_REQ_SCRATCH_SIZE.min(ctx.len())) } < 0 {
+        return 0;
+    }
+
+    let data = SkbData::from_ctx(&ctx);
+
+    for i in 0..MAX_REQ_SCRATCH_SIZE {
+        if data.is_length_out_of_bounds(i as usize + 4) {
+            break;
+        }
+
+        if unsafe { data.slice_unchecked(i as usize) } == b"\r\n\r\n" {
+            return ctx.len();
+        }
+    }
+    0
 }
 
 #[stream_verdict]
@@ -43,14 +61,12 @@ pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
 }
 
 fn try_stream_verdict(ctx: SkBuffContext) -> Result<u32, u32> {
-    let skb_size = MAX_SKB_SIZE.min(ctx.len());
-
-    if unsafe { bpf_skb_pull_data(ctx.skb.skb, skb_size) } < 0 {
+    if unsafe { bpf_skb_pull_data(ctx.skb.skb, 0) } < 0 {
         return Err(SK_DROP);
     }
 
     #[cfg(feature = "debug")]
-    info!(&ctx, "stream_verdict triggered, skb_size={}", skb_size);
+    info!(&ctx, "stream_verdict triggered, skb_size={}", ctx.len());
 
     let req = get_http_buf().ok_or(SK_DROP)?;
     req._offset = 0;
