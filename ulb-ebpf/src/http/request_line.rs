@@ -46,6 +46,7 @@ fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
         4 if data.slice(0) == Some(b"POST") => HttpMethod::Post,
         5 if data.slice(0) == Some(b"PATCH") => HttpMethod::Patch,
         5 if data.slice(0) == Some(b"TRACE") => HttpMethod::Trace,
+        5 if data.slice(0) == Some(b"QUERY") => HttpMethod::Query,
         6 if data.slice(0) == Some(b"DELETE") => HttpMethod::Delete,
         7 if data.slice(0) == Some(b"CONNECT") => HttpMethod::Connect,
         7 if data.slice(0) == Some(b"OPTIONS") => HttpMethod::Options,

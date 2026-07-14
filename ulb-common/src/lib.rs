@@ -18,11 +18,12 @@ pub enum HttpMethod {
     Get,
     Put,
     Post,
-    Delete,
-    Patch,
     Head,
-    Connect,
+    Patch,
     Trace,
+    Query, // RFC 10008
+    Delete,
+    Connect,
     Options,
 }
 
@@ -33,11 +34,12 @@ impl HttpMethod {
             Self::Get => c"GET",
             Self::Put => c"PUT",
             Self::Post => c"POST",
-            Self::Delete => c"DELETE",
-            Self::Patch => c"PATCH",
             Self::Head => c"HEAD",
-            Self::Connect => c"CONNECT",
+            Self::Patch => c"PATCH",
             Self::Trace => c"TRACE",
+            Self::Query => c"QUERY",
+            Self::Delete => c"DELETE",
+            Self::Connect => c"CONNECT",
             Self::Options => c"OPTIONS",
         }
     }
