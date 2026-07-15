@@ -7,9 +7,15 @@ use core::ops::{
     DerefMut,
 };
 
-pub const HTTP_MAX_HEADERS: usize = 4;
+// -4 to keep loop iterations under verifier's 8192 jump limit
+pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024 - 4; // around 8kb for req line and headers
+
+// headers
+pub const HTTP_MAX_HEADERS: usize = 256;
 pub const HTTP_HDR_KEY_MAX_SIZE: usize = 32;
 pub const HTTP_HDR_VAL_MAX_SIZE: usize = 64;
+
+// req line
 pub const HTTP_URI_MAX_SIZE: usize = 256;
 
 #[repr(C)]

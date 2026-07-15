@@ -26,29 +26,33 @@ use http::{
     headers::parse_headers,
     request_line::parse_request_line,
 };
+use ulb_common::HTTP_REQ_MAX_SCRATCH_SIZE;
 
 use crate::http::skb_data::SkbData;
-
-// -4 to keep loop iterations under verifier's 8192 jump limit
-const MAX_REQ_SCRATCH_SIZE: u32 = 8 * 1024 - 4; // around 8kb for req line and headers
 
 #[map]
 static CONN_MAP: SockMap = SockMap::with_max_entries(1024, 0);
 
 #[stream_parser]
 pub fn stream_parser(ctx: SkBuffContext) -> u32 {
-    if unsafe { bpf_skb_pull_data(ctx.skb.skb, MAX_REQ_SCRATCH_SIZE.min(ctx.len())) } < 0 {
+    if unsafe {
+        bpf_skb_pull_data(
+            ctx.skb.skb,
+            (HTTP_REQ_MAX_SCRATCH_SIZE as u32).min(ctx.len()),
+        )
+    } < 0
+    {
         return 0;
     }
 
     let data = SkbData::from_ctx(&ctx);
 
-    for i in 0..MAX_REQ_SCRATCH_SIZE {
-        if data.is_length_out_of_bounds(i as usize + 4) {
+    for i in 0..HTTP_REQ_MAX_SCRATCH_SIZE {
+        if data.is_length_out_of_bounds(i + 4) {
             break;
         }
 
-        if unsafe { data.slice_unchecked(i as usize) } == b"\r\n\r\n" {
+        if unsafe { data.slice_unchecked(i) } == b"\r\n\r\n" {
             return ctx.len();
         }
     }
