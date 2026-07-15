@@ -59,9 +59,8 @@ pub fn parse_headers(ctx: &SkBuffContext, req: &mut HttpRequest) -> Result<u32, 
     loop_ctx.error.map_or(Ok(req._hdr_count), Err)
 }
 
-extern "C" fn callback(_idx: u32, ctx: *mut c_void) -> c_long {
+extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
     let loop_ctx = unsafe { &mut *(ctx as *mut LoopContext) };
-    let idx = _idx as usize;
     let hdr = match loop_ctx.req.headers.get_mut(idx) {
         Some(hdr) => hdr,
         None => return 1,
