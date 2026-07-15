@@ -1,15 +1,22 @@
-use core::ffi::c_void;
+use core::ffi::{
+    c_long,
+    c_void,
+};
 
 #[cfg(feature = "debug")]
 use aya_ebpf::bpf_printk;
 use aya_ebpf::{
-    helpers::bpf_skb_load_bytes,
+    helpers::{
+        bpf_loop,
+        bpf_skb_load_bytes,
+    },
     programs::SkBuffContext,
 };
 use ulb_common::{
     HTTP_HDR_KEY_MAX_SIZE,
     HTTP_HDR_VAL_MAX_SIZE,
     HTTP_MAX_HEADERS,
+    HTTP_REQ_MAX_SCRATCH_SIZE,
     HttpHeader,
     HttpRequest,
 };
@@ -19,30 +26,69 @@ use crate::http::{
     skb_data::SkbData,
 };
 
-// max practical size of http headers section
-const MAX_HEADERS_SIZE: usize = 8192;
+struct LoopContext<'a> {
+    ctx: &'a SkBuffContext,
+    req: &'a mut HttpRequest,
+    data: SkbData,
+    error: Option<HttpParseError>,
+}
 
 pub fn parse_headers(ctx: &SkBuffContext, req: &mut HttpRequest) -> Result<u32, HttpParseError> {
     let data = SkbData::from_ctx(ctx);
+    let mut loop_ctx = LoopContext {
+        ctx,
+        req,
+        data,
+        error: None,
+    };
 
-    for i in 0..HTTP_MAX_HEADERS {
-        if req._hdr_count >= HTTP_MAX_HEADERS as u32 {
-            break;
-        }
+    unsafe {
+        bpf_loop(
+            HTTP_MAX_HEADERS as u32,
+            callback as *mut c_void,
+            &mut loop_ctx as *mut LoopContext as *mut c_void,
+            0,
+        )
+    };
 
-        let hdr = &mut req.headers[i];
-        let consumed = parse_header(ctx, &data, req._offset as usize, hdr)?;
-
-        // end of headers
-        if consumed == 0 {
-            break;
-        }
-
-        req._offset += consumed;
-        req._hdr_count += 1;
+    #[cfg(feature = "debug")]
+    unsafe {
+        bpf_printk!(c"[hdr][total]: %d", loop_ctx.req._hdr_count);
     }
 
-    Ok(req._hdr_count)
+    loop_ctx.error.map_or(Ok(req._hdr_count), Err)
+}
+
+extern "C" fn callback(_idx: u32, ctx: *mut c_void) -> c_long {
+    let loop_ctx = unsafe { &mut *(ctx as *mut LoopContext) };
+    let idx = _idx as usize;
+    let hdr = match loop_ctx.req.headers.get_mut(idx) {
+        Some(hdr) => hdr,
+        None => return 1,
+    };
+
+    match parse_header(
+        loop_ctx.ctx,
+        &loop_ctx.data,
+        loop_ctx.req._offset as usize,
+        hdr,
+    ) {
+        Ok(consumed) => {
+            if consumed == 0 {
+                // end of headers
+                return 1;
+            }
+
+            loop_ctx.req._offset += consumed;
+            loop_ctx.req._hdr_count += 1;
+
+            0
+        }
+        Err(err) => {
+            loop_ctx.error = Some(err);
+            1
+        }
+    }
 }
 
 #[inline(never)]
@@ -52,7 +98,7 @@ fn parse_header(
     offset: usize,
     hdr: &mut HttpHeader,
 ) -> Result<u32, HttpParseError> {
-    if offset > MAX_HEADERS_SIZE {
+    if offset > HTTP_REQ_MAX_SCRATCH_SIZE {
         return Ok(0);
     }
 
