@@ -34,6 +34,8 @@ struct LoopContext<'a> {
 }
 
 pub fn parse_headers(ctx: &SkBuffContext, req: &mut HttpRequest) -> Result<u32, HttpParseError> {
+    req.reset_headers();
+
     let data = SkbData::from_ctx(ctx);
     let mut loop_ctx = LoopContext {
         ctx,
@@ -53,10 +55,10 @@ pub fn parse_headers(ctx: &SkBuffContext, req: &mut HttpRequest) -> Result<u32, 
 
     #[cfg(feature = "debug")]
     unsafe {
-        bpf_printk!(c"[hdr][total]: %d", loop_ctx.req._hdr_count);
+        bpf_printk!(c"[hdr][total]: %d", loop_ctx.req.headers.len);
     }
 
-    loop_ctx.error.map_or(Ok(req._hdr_count), Err)
+    loop_ctx.error.map_or(Ok(req.headers.len), Err)
 }
 
 extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
@@ -79,7 +81,7 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
             }
 
             loop_ctx.req._offset += consumed;
-            loop_ctx.req._hdr_count += 1;
+            loop_ctx.req.headers.len += 1;
 
             0
         }

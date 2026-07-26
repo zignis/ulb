@@ -73,8 +73,6 @@ fn try_stream_verdict(ctx: SkBuffContext) -> Result<u32, u32> {
     info!(&ctx, "stream_verdict triggered, skb_size={}", ctx.len());
 
     let req = get_http_buf().ok_or(SK_DROP)?;
-    req._offset = 0;
-    req._hdr_count = 0;
 
     if let Err(_) = parse_request_line(&ctx, req) {
         #[cfg(feature = "debug")]
@@ -102,7 +100,7 @@ fn try_stream_verdict(ctx: SkBuffContext) -> Result<u32, u32> {
     }
 
     #[cfg(feature = "debug")]
-    info!(ctx, "parsed {} headers", req._hdr_count);
+    info!(ctx, "parsed {} headers", req.headers.len);
 
     Ok(SK_PASS)
 }
