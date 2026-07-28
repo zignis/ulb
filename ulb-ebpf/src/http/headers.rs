@@ -13,8 +13,8 @@ use aya_ebpf::{
     programs::SkBuffContext,
 };
 use ulb_common::{
-    HTTP_HDR_KEY_MAX_SIZE,
-    HTTP_HDR_VAL_MAX_SIZE,
+    HTTP_HDR_KEY_MAX_LEN,
+    HTTP_HDR_VAL_MAX_LEN,
     HTTP_MAX_HEADERS,
     HTTP_REQ_MAX_SCRATCH_SIZE,
     HttpHeader,
@@ -111,7 +111,7 @@ fn parse_header(
     // key
     let mut colon_pos: usize = 0;
 
-    for i in 0..HTTP_HDR_KEY_MAX_SIZE {
+    for i in 0..HTTP_HDR_KEY_MAX_LEN {
         match data.at(offset + i) {
             Some(b':') => {
                 colon_pos = i;
@@ -150,7 +150,7 @@ fn parse_header(
         value_start += 1;
     }
 
-    for i in 0..HTTP_HDR_VAL_MAX_SIZE {
+    for i in 0..HTTP_HDR_VAL_MAX_LEN {
         match data.at(value_start + i) {
             Some(b'\r') | Some(b'\n') => {
                 value_len = i;

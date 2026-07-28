@@ -4,7 +4,7 @@ use aya_ebpf::{
     programs::SkBuffContext,
 };
 use ulb_common::{
-    HTTP_URI_MAX_SIZE,
+    HTTP_URI_MAX_LEN,
     HttpMethod,
     HttpRequest,
     HttpVersion,
@@ -58,7 +58,7 @@ fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
 
 #[inline(never)]
 fn parse_uri_len(data: SkbData, uri_start: usize) -> Result<usize, HttpParseError> {
-    for i in 0..HTTP_URI_MAX_SIZE {
+    for i in 0..HTTP_URI_MAX_LEN {
         match data.at(uri_start + i) {
             Some(b' ') => {
                 return if i == 0 {

@@ -12,11 +12,11 @@ pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024 - 4; // around 8kb for req
 
 // headers
 pub const HTTP_MAX_HEADERS: usize = 256;
-pub const HTTP_HDR_KEY_MAX_SIZE: usize = 32;
-pub const HTTP_HDR_VAL_MAX_SIZE: usize = 64;
+pub const HTTP_HDR_KEY_MAX_LEN: usize = 32;
+pub const HTTP_HDR_VAL_MAX_LEN: usize = 64;
 
 // req line
-pub const HTTP_URI_MAX_SIZE: usize = 256;
+pub const HTTP_URI_MAX_LEN: usize = 256;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -73,6 +73,8 @@ impl HttpVersion {
 pub struct HttpHeader {
     pub key: BoundedStr<HTTP_HDR_KEY_MAX_SIZE>,
     pub value: BoundedStr<HTTP_HDR_VAL_MAX_SIZE>,
+    pub key: BoundedStr<HTTP_HDR_KEY_MAX_LEN>,
+    pub value: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
 }
 
 #[repr(C)]
@@ -80,7 +82,7 @@ pub struct HttpHeader {
 pub struct HttpRequest {
     pub method: HttpMethod,
     pub version: HttpVersion,
-    pub uri: BoundedStr<HTTP_URI_MAX_SIZE>,
+    pub uri: BoundedStr<HTTP_URI_MAX_LEN>,
     pub headers: BoundedVec<HttpHeader, HTTP_MAX_HEADERS>,
     // -- internal
     pub _offset: u32, // read offset
