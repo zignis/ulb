@@ -10,7 +10,7 @@ use ulb_common::{
     HttpVersion,
 };
 
-use crate::http::{
+use super::{
     HttpParseError,
     skb_data::SkbData,
 };

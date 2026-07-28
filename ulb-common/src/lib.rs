@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod containers;
+pub mod ir;
 
 #[cfg(feature = "debug")]
 use core::ffi::CStr;

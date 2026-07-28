@@ -21,7 +21,7 @@ use ulb_common::{
     HttpRequest,
 };
 
-use crate::http::{
+use super::{
     HttpParseError,
     skb_data::SkbData,
 };
