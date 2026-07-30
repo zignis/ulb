@@ -8,6 +8,12 @@ use core::ffi::CStr;
 
 use containers::*;
 
+// total programs for available for tail call
+pub const JMP_PROG_COUNT: u32 = 1;
+
+// prog idx for tail calls
+pub const JMP_PROG_ROUTING: u32 = 0;
+
 // -4 to keep loop iterations under verifier's 8192 jump limit
 pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024 - 4; // around 8kb for req line and headers
 
@@ -72,8 +78,6 @@ impl HttpVersion {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct HttpHeader {
-    pub key: BoundedStr<HTTP_HDR_KEY_MAX_SIZE>,
-    pub value: BoundedStr<HTTP_HDR_VAL_MAX_SIZE>,
     pub key: BoundedStr<HTTP_HDR_KEY_MAX_LEN>,
     pub value: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
 }

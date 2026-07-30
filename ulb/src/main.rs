@@ -1,5 +1,8 @@
 use aya::{
-    maps::SockMap,
+    maps::{
+        ProgramArray,
+        SockMap,
+    },
     programs::SkSkb,
 };
 use log::error;
@@ -7,6 +10,7 @@ use tokio::{
     net::TcpListener,
     signal,
 };
+use ulb_common::JMP_PROG_ROUTING;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,15 +41,24 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut conn_map: SockMap<_> = SockMap::try_from(ebpf.take_map("CONN_MAP").unwrap())?;
+    let mut connection_map: SockMap<_> =
+        SockMap::try_from(ebpf.take_map("CONNECTION_MAP").unwrap())?;
 
     let parser: &mut SkSkb = ebpf.program_mut("stream_parser").unwrap().try_into()?;
     parser.load()?;
-    parser.attach(conn_map.fd())?;
+    parser.attach(connection_map.fd())?;
 
     let verdict: &mut SkSkb = ebpf.program_mut("stream_verdict").unwrap().try_into()?;
     verdict.load()?;
-    verdict.attach(conn_map.fd())?;
+    verdict.attach(connection_map.fd())?;
+
+    let router: &mut SkSkb = ebpf.program_mut("router").unwrap().try_into()?;
+    router.load()?;
+
+    // jump table for tail calls
+    let mut jmp_table: ProgramArray<_> =
+        ProgramArray::try_from(ebpf.take_map("JMP_TABLE").unwrap())?;
+    jmp_table.set(JMP_PROG_ROUTING, router.fd().unwrap(), 0)?;
 
     let listener = TcpListener::bind("0.0.0.0:8082").await?;
     println!("listening on http://localhost:8082");
@@ -56,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
                 let (mut stream, peer_addr) = res?;
                 println!("accepted {}", peer_addr);
 
-                if let Err(err) = conn_map.set(0, &stream, 0) {
+                if let Err(err) = connection_map.set(0, &stream, 0) {
                     error!("failed to insert fd: {}", err);
                 }
 
