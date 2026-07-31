@@ -2,36 +2,65 @@
 #![no_main]
 
 mod http;
+mod router;
 
 #[cfg(feature = "debug")]
 use aya_ebpf::bpf_printk;
 use aya_ebpf::{
-    bindings::sk_action::{
-        SK_DROP,
-        SK_PASS,
-    },
+    bindings::sk_action::SK_DROP,
     helpers::bpf_skb_pull_data,
     macros::{
         map,
         stream_parser,
         stream_verdict,
     },
-    maps::SockMap,
+    maps::{
+        Array,
+        HashMap,
+        ProgramArray,
+        SockMap,
+    },
     programs::SkBuffContext,
 };
 #[cfg(feature = "debug")]
 use aya_log_ebpf::info;
-use http::{
-    get_http_buf,
-    headers::parse_headers,
-    request_line::parse_request_line,
+use http::SkbData;
+use ulb_common::{
+    HTTP_REQ_MAX_SCRATCH_SIZE,
+    JMP_PROG_COUNT,
+    JMP_PROG_ROUTING,
+    ir::{
+        BackendCluster,
+        MAX_BACKEND_CLUSTERS,
+        MAX_ROUTES,
+        MAX_VHOSTS,
+        RouteValue,
+        VHostKey,
+        VHostValue,
+    },
 };
-use ulb_common::HTTP_REQ_MAX_SCRATCH_SIZE;
 
-use crate::http::skb_data::SkbData;
+//
 
 #[map]
-static CONN_MAP: SockMap = SockMap::with_max_entries(1024, 0);
+static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COUNT, 0);
+
+#[map]
+static BACKEND_MAP: SockMap = SockMap::with_max_entries(1024, 0);
+
+#[map]
+static CONNECTION_MAP: SockMap = SockMap::with_max_entries(1024, 0);
+
+#[map]
+static VHOST_MAP: HashMap<VHostKey, VHostValue> = HashMap::with_max_entries(MAX_VHOSTS, 0);
+
+#[map]
+static ROUTE_TABLE: Array<RouteValue> = Array::with_max_entries(MAX_ROUTES, 0);
+
+#[map]
+static CLUSTER_TABLE: Array<BackendCluster> = Array::with_max_entries(MAX_BACKEND_CLUSTERS, 0);
+
+//
 
 #[stream_parser]
 pub fn stream_parser(ctx: SkBuffContext) -> u32 {
@@ -61,48 +90,40 @@ pub fn stream_parser(ctx: SkBuffContext) -> u32 {
 
 #[stream_verdict]
 pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
-    try_stream_verdict(ctx).unwrap_or(SK_DROP)
-}
-
-fn try_stream_verdict(ctx: SkBuffContext) -> Result<u32, u32> {
     if unsafe { bpf_skb_pull_data(ctx.skb.skb, 0) } < 0 {
-        return Err(SK_DROP);
+        return SK_DROP;
     }
 
     #[cfg(feature = "debug")]
     info!(&ctx, "stream_verdict triggered, skb_size={}", ctx.len());
 
-    let req = get_http_buf().ok_or(SK_DROP)?;
-
-    if let Err(_) = parse_request_line(&ctx, req) {
-        #[cfg(feature = "debug")]
-        info!(&ctx, "parse_request_line failed");
-        return Err(SK_DROP);
+    if http::parse_req(&ctx).is_err() {
+        return SK_DROP;
     }
 
-    #[cfg(feature = "debug")]
-    info!(&ctx, "parsed req line, offset={}", req._offset);
-
-    #[cfg(feature = "debug")]
+    // tail call to router
     unsafe {
-        bpf_printk!(
-            c"[%s][%s]: %s",
-            req.method.as_c_str().as_ptr(),
-            req.version.as_c_str().as_ptr(),
-            req.uri.as_ptr()
-        );
-    }
-
-    if let Err(_) = parse_headers(&ctx, req) {
-        #[cfg(feature = "debug")]
-        info!(&ctx, "parse_headers failed");
-        return Err(SK_DROP);
+        JMP_TABLE.tail_call(&ctx, JMP_PROG_ROUTING);
     }
 
     #[cfg(feature = "debug")]
-    info!(ctx, "parsed {} headers", req.headers.len);
+    info!(&ctx, "router tail call failed");
 
-    Ok(SK_PASS)
+    // TODO: change default action
+    SK_DROP
+}
+
+#[stream_verdict]
+pub fn router(ctx: SkBuffContext) -> u32 {
+    if router::route_req(&ctx).is_err() {
+        return SK_DROP;
+    };
+
+    #[cfg(feature = "debug")]
+    info!(&ctx, "req routed");
+
+    // TODO: change default action
+    SK_DROP
 }
 
 #[cfg(not(test))]
