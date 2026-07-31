@@ -58,3 +58,9 @@ where
         })
     }
 }
+
+#[cfg(feature = "user")]
+unsafe impl<T, const MAX_SIZE: usize> aya::Pod for BoundedVec<T, MAX_SIZE> where
+    T: aya::Pod + Copy + Clone + Default
+{
+}

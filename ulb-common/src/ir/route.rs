@@ -30,3 +30,12 @@ pub struct RouteValue {
     pub match_type: RouteMatchType,
     pub action: RouteAction,
 }
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for RouteValue {}
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for RouteMatchType {}
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for RouteAction {}

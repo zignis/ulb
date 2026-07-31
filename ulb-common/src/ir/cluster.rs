@@ -24,3 +24,12 @@ pub struct BackendEndpoint {
     pub sock_map_idx: u32, // idx into backend sock-map
     pub flags: u8,         // healthcheck
 }
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for BackendCluster {}
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for LoadBalancingPolicy {}
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for BackendEndpoint {}

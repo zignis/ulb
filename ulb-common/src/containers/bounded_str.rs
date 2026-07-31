@@ -6,7 +6,7 @@ use core::ops::{
 };
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BoundedStr<const MAX_SIZE: usize> {
     pub len: u32,
     pub data: [u8; MAX_SIZE],
@@ -65,3 +65,6 @@ impl<const MAX_SIZE: usize> TryFrom<String> for BoundedStr<MAX_SIZE> {
         value.as_str().try_into()
     }
 }
+
+#[cfg(feature = "user")]
+unsafe impl<const MAX_SIZE: usize> aya::Pod for BoundedStr<MAX_SIZE> {}
