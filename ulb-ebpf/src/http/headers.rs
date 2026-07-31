@@ -80,6 +80,10 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
                 return 1;
             }
 
+            if hdr.key.len == 4 && &hdr.key[..4] == b"host" {
+                loop_ctx.req.host = hdr.value;
+            }
+
             loop_ctx.req._offset += consumed;
             loop_ctx.req.headers.len += 1;
 

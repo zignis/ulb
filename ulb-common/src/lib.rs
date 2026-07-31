@@ -88,6 +88,7 @@ pub struct HttpRequest {
     pub method: HttpMethod,
     pub version: HttpVersion,
     pub uri: BoundedStr<HTTP_URI_MAX_LEN>,
+    pub host: BoundedStr<HTTP_HDR_VAL_MAX_LEN>, // `Host` header value
     pub headers: BoundedVec<HttpHeader, HTTP_MAX_HEADERS>,
     // -- internal
     pub _offset: u32, // read offset
