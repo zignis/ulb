@@ -19,7 +19,7 @@ pub struct BackendCluster {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct BackendEndpoint {
     pub sock_map_idx: u32, // idx into backend sock-map
     pub flags: u8,         // healthcheck
