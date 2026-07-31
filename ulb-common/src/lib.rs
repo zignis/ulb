@@ -1,5 +1,8 @@
 #![no_std]
 
+#[cfg(feature = "user")]
+extern crate alloc;
+
 pub mod containers;
 pub mod ir;
 
@@ -58,6 +61,27 @@ impl HttpMethod {
     }
 }
 
+#[cfg(feature = "user")]
+impl TryFrom<&str> for HttpMethod {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_ascii_lowercase().as_str() {
+            "get" => Ok(Self::Get),
+            "put" => Ok(Self::Put),
+            "post" => Ok(Self::Post),
+            "head" => Ok(Self::Head),
+            "patch" => Ok(Self::Patch),
+            "trace" => Ok(Self::Trace),
+            "query" => Ok(Self::Query),
+            "delete" => Ok(Self::Delete),
+            "connect" => Ok(Self::Connect),
+            "options" => Ok(Self::Options),
+            _ => Err(()),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum HttpVersion {
@@ -76,7 +100,7 @@ impl HttpVersion {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct HttpHeader {
     pub key: BoundedStr<HTTP_HDR_KEY_MAX_LEN>,
     pub value: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
