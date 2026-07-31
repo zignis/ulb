@@ -31,19 +31,34 @@ pub const HTTP_URI_MAX_LEN: usize = 256;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum HttpMethod {
-    Get,
-    Put,
-    Post,
-    Head,
-    Patch,
-    Trace,
-    Query, // RFC 10008
-    Delete,
-    Connect,
-    Options,
+    Get     = 1 << 0,
+    Put     = 1 << 1,
+    Post    = 1 << 2,
+    Head    = 1 << 3,
+    Patch   = 1 << 4,
+    Trace   = 1 << 5,
+    Query   = 1 << 6, // RFC 10008
+    Delete  = 1 << 7,
+    Connect = 1 << 8,
+    Options = 1 << 9,
+}
+
+impl From<HttpMethod> for u16 {
+    fn from(value: HttpMethod) -> Self {
+        value as u16
+    }
 }
 
 impl HttpMethod {
+    pub fn match_mask(&self, mask: u16) -> bool {
+        // if no allowed methods are specified by user, allow all methods
+        if mask == 0 {
+            return true;
+        }
+
+        (mask & u16::from(*self)) != 0
+    }
+
     #[cfg(feature = "debug")]
     pub const fn as_c_str(&self) -> &'static CStr {
         match self {
