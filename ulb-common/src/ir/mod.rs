@@ -1,4 +1,4 @@
-pub const VHOST_MAX_LEN: usize = 64;
+pub const VHOST_MAX_LEN: usize = 64; // must be <= HTTP_HDR_VAL_MAX_LEN
 pub const PATH_MAX_LEN: usize = 128;
 pub const MAX_VHOSTS: u32 = 64;
 pub const MAX_ROUTES: u32 = 4096;
