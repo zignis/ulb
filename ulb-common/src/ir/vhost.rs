@@ -1,14 +1,18 @@
-use super::VHOST_MAX_LEN;
-use crate::containers::BoundedStr;
+use crate::{
+    HTTP_HDR_VAL_MAX_LEN,
+    containers::BoundedStr,
+};
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "user", derive(PartialEq, Eq, Hash))]
 pub struct VHostKey {
-    pub host: BoundedStr<VHOST_MAX_LEN>,
+    pub host: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "user", derive(PartialEq, Eq))]
 pub struct VHostValue {
     pub route_start: u32, // idx of first route for this vhost
     pub route_count: u32, // number of routes for this vhost
