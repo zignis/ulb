@@ -6,10 +6,27 @@ use core::ops::{
 };
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "user", derive(PartialEq, Eq, Hash))]
 pub struct BoundedStr<const MAX_SIZE: usize> {
     pub len: u32,
     pub data: [u8; MAX_SIZE],
+}
+
+impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
+    pub fn clear_and_copy(&mut self, src: BoundedStr<MAX_SIZE>) {
+        let len = src.len;
+        self.len = len;
+        self.data = [0; MAX_SIZE];
+
+        for i in 0..MAX_SIZE {
+            if i >= len as usize {
+                break;
+            }
+
+            self.data[i] = src.data[i];
+        }
+    }
 }
 
 impl<const MAX_SIZE: usize> Default for BoundedStr<MAX_SIZE> {

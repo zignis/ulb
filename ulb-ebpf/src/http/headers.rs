@@ -80,8 +80,9 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
                 return 1;
             }
 
-            if hdr.key.len == 4 && &hdr.key[..4] == b"host" {
-                loop_ctx.req.host = hdr.value;
+            if hdr.key.len == 4 && (&hdr.key[..4] == b"host" || &hdr.key[..4] == b"Host") {
+                // host bytes must be zeroed out for valid hashing
+                loop_ctx.req.host.clear_and_copy(hdr.value);
             }
 
             loop_ctx.req._offset += consumed;
@@ -89,8 +90,10 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
 
             0
         }
+
         Err(err) => {
             loop_ctx.error = Some(err);
+
             1
         }
     }
