@@ -4,11 +4,16 @@
 mod http;
 mod router;
 
-#[cfg(feature = "debug")]
-use aya_ebpf::bpf_printk;
 use aya_ebpf::{
-    bindings::sk_action::SK_DROP,
-    helpers::bpf_skb_pull_data,
+    bindings::sk_action::{
+        SK_DROP,
+        SK_PASS,
+    },
+    cty::c_void,
+    helpers::{
+        bpf_get_socket_cookie,
+        bpf_skb_pull_data,
+    },
     macros::{
         map,
         stream_parser,
@@ -18,7 +23,7 @@ use aya_ebpf::{
         Array,
         HashMap,
         ProgramArray,
-        SockMap,
+        SockHash,
     },
     programs::SkBuffContext,
 };
@@ -29,6 +34,8 @@ use ulb_common::{
     HTTP_REQ_MAX_SCRATCH_SIZE,
     JMP_PROG_COUNT,
     JMP_PROG_ROUTING,
+    SESSION_ENTRY_CLIENT,
+    SessionEntry,
     ir::{
         BackendCluster,
         MAX_BACKEND_CLUSTERS,
@@ -46,10 +53,13 @@ use ulb_common::{
 static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COUNT, 0);
 
 #[map]
-static BACKEND_MAP: SockMap = SockMap::with_max_entries(1024, 0);
+static BACKEND_MAP: SockHash<u64> = SockHash::with_max_entries(1024, 0);
 
 #[map]
-static CONNECTION_MAP: SockMap = SockMap::with_max_entries(1024, 0);
+static CONNECTION_MAP: SockHash<u64> = SockHash::with_max_entries(1024, 0);
+
+#[map]
+static SESSION_MAP: HashMap<u64, SessionEntry> = HashMap::with_max_entries(4096, 0);
 
 #[map]
 static VHOST_MAP: HashMap<VHostKey, VHostValue> = HashMap::with_max_entries(MAX_VHOSTS, 0);
@@ -64,6 +74,13 @@ static CLUSTER_TABLE: Array<BackendCluster> = Array::with_max_entries(MAX_BACKEN
 
 #[stream_parser]
 pub fn stream_parser(ctx: SkBuffContext) -> u32 {
+    let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
+
+    // fast-path
+    if unsafe { SESSION_MAP.get(&cookie) }.is_some() {
+        return ctx.len();
+    }
+
     if unsafe {
         bpf_skb_pull_data(
             ctx.skb.skb,
@@ -97,6 +114,21 @@ pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
     #[cfg(feature = "debug")]
     info!(&ctx, "stream_verdict triggered, skb_size={}", ctx.len());
 
+    let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
+
+    // fast-path
+    if let Some([mut key, kind]) = unsafe { SESSION_MAP.get(&cookie) }.copied() {
+        if kind == SESSION_ENTRY_CLIENT {
+            if { CONNECTION_MAP.redirect_skb(&ctx, &mut key, 0) } == (SK_PASS as i64) {
+                return SK_PASS;
+            }
+        } else {
+            if { BACKEND_MAP.redirect_skb(&ctx, &mut key, 0) } == (SK_PASS as i64) {
+                return SK_PASS;
+            }
+        }
+    }
+
     if http::parse_req(&ctx).is_err() {
         return SK_DROP;
     }
@@ -115,15 +147,15 @@ pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
 
 #[stream_verdict]
 pub fn router(ctx: SkBuffContext) -> u32 {
-    if router::route_req(&ctx).is_err() {
-        return SK_DROP;
-    };
+    match router::route_req(&ctx) {
+        Ok(action) => {
+            #[cfg(feature = "debug")]
+            info!(&ctx, "req routed");
+            action
+        }
 
-    #[cfg(feature = "debug")]
-    info!(&ctx, "req routed");
-
-    // TODO: change default action
-    SK_DROP
+        Err(_) => SK_DROP,
+    }
 }
 
 #[cfg(not(test))]
