@@ -5,8 +5,6 @@ use crate::containers::BoundedVec;
 #[derive(Debug, Copy, Clone)]
 pub enum LoadBalancingPolicy {
     RoundRobin,
-    WeightedRoundRobin,
-    LeastLoadedBackend,
 }
 
 #[repr(C)]
@@ -21,8 +19,8 @@ pub struct BackendCluster {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default)]
 pub struct BackendEndpoint {
-    pub sock_map_idx: u32, // idx into backend sock-map
-    pub flags: u8,         // healthcheck
+    pub cookie: u64, // socket cookie of the backend connection
+    pub flags: u8,   // healthcheck
 }
 
 #[cfg(feature = "user")]
