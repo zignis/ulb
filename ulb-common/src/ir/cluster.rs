@@ -23,7 +23,7 @@ pub struct BackendCluster {
 #[derive(Debug, Copy, Clone, Default)]
 pub struct BackendEndpoint {
     pub cookie: SocketCookie, // socket cookie of the backend connection
-    pub flags: u8,            // healthcheck
+    pub flags: u8,            // TODO: endpoint state for future usage
 }
 
 #[cfg(feature = "user")]
