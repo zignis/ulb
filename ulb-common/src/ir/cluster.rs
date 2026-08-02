@@ -1,5 +1,8 @@
 use super::MAX_BACKENDS_PER_CLUSTER;
-use crate::containers::BoundedVec;
+use crate::{
+    SocketCookie,
+    containers::BoundedVec,
+};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -19,8 +22,8 @@ pub struct BackendCluster {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default)]
 pub struct BackendEndpoint {
-    pub cookie: u64, // socket cookie of the backend connection
-    pub flags: u8,   // healthcheck
+    pub cookie: SocketCookie, // socket cookie of the backend connection
+    pub flags: u8,            // healthcheck
 }
 
 #[cfg(feature = "user")]

@@ -12,6 +12,7 @@ use aya_log_ebpf::info;
 use ulb_common::{
     SESSION_ENTRY_BACKEND,
     SESSION_ENTRY_CLIENT,
+    SocketCookie,
     ir::RouteAction,
 };
 
@@ -52,7 +53,8 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
             info!(&ctx, "routing to cluster {}", cluster_idx);
 
             let mut backend_cookie = cluster::select_backend(cluster_idx)?;
-            let client_cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
+            let client_cookie =
+                unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) } as SocketCookie;
 
             #[allow(unused_variables)]
             if let Err(eno) =

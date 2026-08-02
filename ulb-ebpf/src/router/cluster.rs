@@ -1,6 +1,8 @@
+use ulb_common::SocketCookie;
+
 use crate::CLUSTER_TABLE;
 
-pub fn select_backend(cluster_idx: u32) -> Result<u64, ()> {
+pub fn select_backend(cluster_idx: u32) -> Result<SocketCookie, ()> {
     let ptr = CLUSTER_TABLE.get_ptr_mut(cluster_idx).ok_or(())?;
     let cluster = unsafe { &mut *ptr };
 

@@ -36,6 +36,7 @@ use ulb_common::{
     JMP_PROG_ROUTING,
     SESSION_ENTRY_CLIENT,
     SessionEntry,
+    SocketCookie,
     ir::{
         BackendCluster,
         MAX_BACKEND_CLUSTERS,
@@ -53,13 +54,13 @@ use ulb_common::{
 static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COUNT, 0);
 
 #[map]
-static BACKEND_MAP: SockHash<u64> = SockHash::with_max_entries(1024, 0);
+static BACKEND_MAP: SockHash<SocketCookie> = SockHash::with_max_entries(1024, 0);
 
 #[map]
-static CONNECTION_MAP: SockHash<u64> = SockHash::with_max_entries(1024, 0);
+static CONNECTION_MAP: SockHash<SocketCookie> = SockHash::with_max_entries(1024, 0);
 
 #[map]
-static SESSION_MAP: HashMap<u64, SessionEntry> = HashMap::with_max_entries(4096, 0);
+static SESSION_MAP: HashMap<SocketCookie, SessionEntry> = HashMap::with_max_entries(4096, 0);
 
 #[map]
 static VHOST_MAP: HashMap<VHostKey, VHostValue> = HashMap::with_max_entries(MAX_VHOSTS, 0);
@@ -119,11 +120,11 @@ pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
     // fast-path
     if let Some([mut key, kind]) = unsafe { SESSION_MAP.get(&cookie) }.copied() {
         if kind == SESSION_ENTRY_CLIENT {
-            if { CONNECTION_MAP.redirect_skb(&ctx, &mut key, 0) } == (SK_PASS as i64) {
+            if CONNECTION_MAP.redirect_skb(&ctx, &mut key, 0) == (SK_PASS as i64) {
                 return SK_PASS;
             }
         } else {
-            if { BACKEND_MAP.redirect_skb(&ctx, &mut key, 0) } == (SK_PASS as i64) {
+            if BACKEND_MAP.redirect_skb(&ctx, &mut key, 0) == (SK_PASS as i64) {
                 return SK_PASS;
             }
         }
