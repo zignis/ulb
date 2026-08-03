@@ -78,9 +78,9 @@ pub fn compile_vhosts(
                     route.method_mask |= method as u16;
                 }
 
-                if let RouteAction::Forward { cluster } = route_cfg.action {
+                if let RouteAction::Forward { cluster } = &route_cfg.action {
                     route.action = ulb_common::ir::RouteAction::Forward {
-                        cluster_idx: *cluster_idx_map.get(&cluster).expect("unknown cluster"),
+                        cluster_idx: *cluster_idx_map.get(cluster).expect("unknown cluster"),
                     }
                 }
 
