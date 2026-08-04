@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 use anyhow::{
     anyhow,
@@ -10,8 +13,8 @@ use ulb_common::{
         BackendCluster,
         BackendEndpoint,
         LoadBalancingPolicy,
-        MAX_BACKEND_CLUSTERS,
         MAX_BACKENDS_PER_CLUSTER,
+        MAX_CLUSTERS,
     },
 };
 
@@ -24,15 +27,20 @@ pub fn compile_clusters(
     let mut clusters = Vec::new();
     let mut cluster_idx_map = HashMap::new();
 
-    if cfg.clusters.len() > MAX_BACKEND_CLUSTERS as usize {
+    if cfg.clusters.len() > MAX_CLUSTERS as usize {
         bail!(
-            "exceeded MAX_BACKEND_CLUSTERS ({}/{MAX_BACKEND_CLUSTERS})",
+            "exceeded maximum clusters ({}/{MAX_CLUSTERS})",
             cfg.clusters.len()
         );
     }
 
     for (idx, cluster_cfg) in cfg.clusters.iter().enumerate() {
-        cluster_idx_map.insert(cluster_cfg.name.clone(), idx as u32);
+        if cluster_idx_map
+            .insert(cluster_cfg.name.clone(), idx as u32)
+            .is_some()
+        {
+            bail!("unexpected duplicate cluster name: {}", cluster_cfg.name);
+        }
 
         let cookies = cookie_map.get(&cluster_cfg.name).ok_or(anyhow!(
             "missing cluster `{}` in `cookie_map`",
@@ -41,7 +49,7 @@ pub fn compile_clusters(
 
         if cookies.len() > MAX_BACKENDS_PER_CLUSTER {
             bail!(
-                "exceeded MAX_BACKENDS_PER_CLUSTER ({}/{MAX_BACKENDS_PER_CLUSTER})",
+                "exceeded maximum backends per cluster ({}/{MAX_BACKENDS_PER_CLUSTER})",
                 cookies.len()
             );
         }
