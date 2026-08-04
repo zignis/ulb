@@ -1,7 +1,4 @@
-use std::collections::{
-    HashMap,
-    HashSet,
-};
+use std::collections::HashMap;
 
 use anyhow::{
     anyhow,
@@ -39,7 +36,7 @@ pub fn compile_clusters(
             .insert(cluster_cfg.name.clone(), idx as u32)
             .is_some()
         {
-            bail!("unexpected duplicate cluster name: {}", cluster_cfg.name);
+            bail!("unexpected duplicate cluster name: `{}`", cluster_cfg.name);
         }
 
         let cookies = cookie_map.get(&cluster_cfg.name).ok_or(anyhow!(
