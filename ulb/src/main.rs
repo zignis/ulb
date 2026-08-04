@@ -41,18 +41,42 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut connection_map: SockMap<_> =
-        SockMap::try_from(ebpf.take_map("CONNECTION_MAP").unwrap())?;
+    let mut connection_map: SockHash<_, SocketCookie> = SockHash::try_from(
+        ebpf.take_map("CONNECTION_MAP")
+            .ok_or_else(|| anyhow!("missing `CONNECTION_MAP`"))?,
+    )?;
 
-    let parser: &mut SkSkb = ebpf.program_mut("stream_parser").unwrap().try_into()?;
+    let mut backend_map: SockHash<_, SocketCookie> = SockHash::try_from(
+        ebpf.take_map("BACKEND_MAP")
+            .ok_or_else(|| anyhow!("missing `BACKEND_MAP`"))?,
+    )?;
+
+    let parser: &mut SkSkb = ebpf
+        .program_mut("stream_parser")
+        .ok_or_else(|| anyhow!("missing `stream_parser` prog"))?
+        .try_into()?;
     parser.load()?;
     parser.attach(connection_map.fd())?;
+    parser.attach(backend_map.fd())?;
 
-    let verdict: &mut SkSkb = ebpf.program_mut("stream_verdict").unwrap().try_into()?;
+    let verdict: &mut SkSkb = ebpf
+        .program_mut("stream_verdict")
+        .ok_or_else(|| anyhow!("missing `stream_verdict` prog"))?
+        .try_into()?;
     verdict.load()?;
     verdict.attach(connection_map.fd())?;
+    verdict.attach(backend_map.fd())?;
 
-    let router: &mut SkSkb = ebpf.program_mut("router").unwrap().try_into()?;
+    // jump table for tail calls
+    let mut jmp_table: ProgramArray<_> = ProgramArray::try_from(
+        ebpf.take_map("JMP_TABLE")
+            .ok_or_else(|| anyhow!("missing `JMP_TABLE`"))?,
+    )?;
+
+    let router: &mut SkSkb = ebpf
+        .program_mut("router")
+        .ok_or_else(|| anyhow!("missing `router` prog"))?
+        .try_into()?;
     router.load()?;
 
     // jump table for tail calls
