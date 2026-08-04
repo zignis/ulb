@@ -1,16 +1,56 @@
+use std::{
+    os::fd::AsRawFd,
+    time::Duration,
+};
+
+use anyhow::anyhow;
 use aya::{
     maps::{
+        Array,
+        HashMap,
         ProgramArray,
-        SockMap,
+        SockHash,
     },
     programs::SkSkb,
 };
-use log::error;
+use log::{
+    error,
+    info,
+};
 use tokio::{
+    io::AsyncReadExt,
     net::TcpListener,
     signal,
+    task::JoinSet,
+    time::timeout,
 };
-use ulb_common::JMP_PROG_ROUTING;
+use ulb_common::{
+    JMP_PROG_ROUTING,
+    SocketCookie,
+    ir::{
+        BackendCluster,
+        RouteValue,
+        VHostKey,
+        VHostValue,
+    },
+};
+
+use crate::{
+    backend::{
+        BackendManager,
+        get_socket_cookie,
+    },
+    config::{
+        adapters::{
+            load_config,
+            native::NativeAdapter,
+        },
+        compiler::compile,
+    },
+};
+
+mod backend;
+mod config;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -79,10 +119,50 @@ async fn main() -> anyhow::Result<()> {
         .try_into()?;
     router.load()?;
 
-    // jump table for tail calls
-    let mut jmp_table: ProgramArray<_> =
-        ProgramArray::try_from(ebpf.take_map("JMP_TABLE").unwrap())?;
-    jmp_table.set(JMP_PROG_ROUTING, router.fd().unwrap(), 0)?;
+    jmp_table.set(
+        JMP_PROG_ROUTING,
+        router
+            .fd()
+            .map_err(|_| anyhow!("failed to set `JMP_PROG_ROUTING`"))?,
+        0,
+    )?;
+
+    // configuration
+    let cfg = load_config::<NativeAdapter, _>("../__ulb_config.yaml")?; // TODO
+    let mut backend_manager = BackendManager::new();
+    let cookie_map = backend_manager
+        .initialize_clusters(&cfg, &mut backend_map)
+        .await?;
+    let ir = compile(&cfg, cookie_map)?;
+
+    let mut vhost_map: HashMap<_, VHostKey, VHostValue> = HashMap::try_from(
+        ebpf.take_map("VHOST_MAP")
+            .ok_or_else(|| anyhow!("missing `VHOST_MAP`"))?,
+    )?;
+
+    for (key, val) in ir.vhost_map {
+        vhost_map.insert(key, val, 0)?;
+    }
+
+    let mut route_table: Array<_, RouteValue> = Array::try_from(
+        ebpf.take_map("ROUTE_TABLE")
+            .ok_or_else(|| anyhow!("missing `ROUTE_TABLE`"))?,
+    )?;
+
+    for (i, route) in ir.route_table.into_iter().enumerate() {
+        route_table.set(i as u32, route, 0)?;
+    }
+
+    let mut cluster_table: Array<_, BackendCluster> = Array::try_from(
+        ebpf.take_map("CLUSTER_TABLE")
+            .ok_or_else(|| anyhow!("missing `CLUSTER_TABLE`"))?,
+    )?;
+
+    for (i, cluster) in ir.cluster_table.into_iter().enumerate() {
+        cluster_table.set(i as u32, cluster, 0)?;
+    }
+
+    info!("config loaded");
 
     let listener = TcpListener::bind("0.0.0.0:8082").await?;
     info!("listening on http://localhost:8082");

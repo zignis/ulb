@@ -18,6 +18,7 @@ log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net", "signal", "io-std", "io-util", "sync", "time"] }
 serde = { workspace = true }
 libc = "0.2.189"
+serde_yaml = "0.9.34"
 
 [build-dependencies]
 anyhow = { workspace = true }
