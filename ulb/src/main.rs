@@ -14,8 +14,10 @@ use aya::{
     programs::SkSkb,
 };
 use log::{
+    Level,
     error,
     info,
+    log_enabled,
 };
 use tokio::{
     io::AsyncReadExt,
@@ -55,6 +57,10 @@ mod config;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
+
+    if !log_enabled!(Level::Info) {
+        println!("RUST_LOG: info level logging is not enabled");
+    }
 
     let mut ebpf = aya::Ebpf::load(aya::include_bytes_aligned!(concat!(
         env!("OUT_DIR"),
@@ -128,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
     )?;
 
     // configuration
-    let cfg = load_config::<NativeAdapter, _>("../__ulb_config.yaml")?; // TODO
+    let cfg = load_config::<NativeAdapter, _>("./__ulb_config.yaml")?; // TODO:
     let mut backend_manager = BackendManager::new();
     let cookie_map = backend_manager
         .initialize_clusters(&cfg, &mut backend_map)
