@@ -1,5 +1,10 @@
 #[cfg(feature = "user")]
 use alloc::string::String;
+#[cfg(feature = "user")]
+use core::fmt::{
+    Display,
+    Formatter,
+};
 use core::ops::{
     Deref,
     DerefMut,
@@ -49,6 +54,14 @@ impl<const MAX_SIZE: usize> Deref for BoundedStr<MAX_SIZE> {
 impl<const MAX_SIZE: usize> DerefMut for BoundedStr<MAX_SIZE> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
+    }
+}
+
+#[cfg(feature = "user")]
+impl<const MAX_SIZE: usize> Display for BoundedStr<MAX_SIZE> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let bytes = self.data.get(..self.len as usize).ok_or(core::fmt::Error)?;
+        f.write_str(str::from_utf8(bytes).map_err(|_| core::fmt::Error)?)
     }
 }
 
