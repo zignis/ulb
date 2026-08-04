@@ -39,7 +39,7 @@ use ulb_common::{
     SocketCookie,
     ir::{
         BackendCluster,
-        MAX_BACKEND_CLUSTERS,
+        MAX_CLUSTERS,
         MAX_ROUTES,
         MAX_VHOSTS,
         RouteValue,
@@ -69,7 +69,7 @@ static VHOST_MAP: HashMap<VHostKey, VHostValue> = HashMap::with_max_entries(MAX_
 static ROUTE_TABLE: Array<RouteValue> = Array::with_max_entries(MAX_ROUTES, 0);
 
 #[map]
-static CLUSTER_TABLE: Array<BackendCluster> = Array::with_max_entries(MAX_BACKEND_CLUSTERS, 0);
+static CLUSTER_TABLE: Array<BackendCluster> = Array::with_max_entries(MAX_CLUSTERS, 0);
 
 //
 
