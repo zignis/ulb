@@ -189,7 +189,7 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 clients.spawn(async move {
-                    let mut buf = [0u8; 1024];
+                    let mut buf = [0u8; 1];
                     loop {
                         if let Ok(0) | Err(_) = stream.read(&mut buf).await {
                             break;
