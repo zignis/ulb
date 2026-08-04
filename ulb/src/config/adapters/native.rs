@@ -12,6 +12,6 @@ pub struct NativeAdapter;
 
 impl ConfigAdapter for NativeAdapter {
     fn parse(content: String) -> Result<UlbConfig> {
-        serde_yaml::from_str(&content).context("failed to parse config file")
+        yaml_serde::from_str(&content).context("failed to parse config file")
     }
 }
