@@ -85,27 +85,53 @@ async fn main() -> anyhow::Result<()> {
     jmp_table.set(JMP_PROG_ROUTING, router.fd().unwrap(), 0)?;
 
     let listener = TcpListener::bind("0.0.0.0:8082").await?;
-    println!("listening on http://localhost:8082");
+    info!("listening on http://localhost:8082");
+
+    let mut clients = JoinSet::new();
 
     loop {
         tokio::select! {
             res = listener.accept() => {
                 let (mut stream, peer_addr) = res?;
-                println!("accepted {}", peer_addr);
+                info!("accepted {peer_addr}");
 
-                if let Err(err) = connection_map.set(0, &stream, 0) {
-                    error!("failed to insert fd: {}", err);
+                let fd = stream.as_raw_fd();
+                let cookie = get_socket_cookie(fd)?;
+
+                if let Err(err) = connection_map.insert(cookie, fd, 0) {
+                    error!("failed to insert client into CONNECTION_MAP: {err}");
                 }
 
-                tokio::spawn(async move {
-                    use tokio::io::{AsyncReadExt};
+                clients.spawn(async move {
                     let mut buf = [0u8; 1024];
-                    let _ = stream.read(&mut buf).await;
+                    loop {
+                        if let Ok(0) | Err(_) = stream.read(&mut buf).await {
+                            break;
+                        }
+                    }
                 });
             }
 
+            Some(event) = backend_manager.next_reconnect_event() => {
+                backend_manager.handle_reconnect(event, &mut backend_map, &mut cluster_table).await;
+            }
+
+            Some(res) = clients.join_next(), if !clients.is_empty() => {
+                if let Err(err) = res {
+                    error!("client failed: {err}");
+                }
+            }
+
             _ = signal::ctrl_c() => {
-                println!("received SIGINT");
+                info!("received SIGINT");
+                backend_manager.shutdown();
+
+                if !clients.is_empty() {
+                    let _ = timeout(Duration::from_secs(5), async {
+                        while clients.join_next().await.is_some() {}
+                    }).await;
+                }
+
                 break;
             }
         }
