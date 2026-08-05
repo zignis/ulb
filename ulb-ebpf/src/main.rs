@@ -181,7 +181,7 @@ pub fn session_cleanup(ctx: FEntryContext) -> i32 {
         let _ = SESSION_MAP.remove(other_cookie);
 
         #[cfg(feature = "debug")]
-        info!(ctx, "cleaned up session for {cookie}");
+        info!(ctx, "cleaned up session for `{}`", cookie);
     }
 
     0
