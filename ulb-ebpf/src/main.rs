@@ -15,6 +15,7 @@ use aya_ebpf::{
         bpf_skb_pull_data,
     },
     macros::{
+        fentry,
         map,
         stream_parser,
         stream_verdict,
@@ -25,7 +26,10 @@ use aya_ebpf::{
         ProgramArray,
         SockHash,
     },
-    programs::SkBuffContext,
+    programs::{
+        FEntryContext,
+        SkBuffContext,
+    },
 };
 #[cfg(feature = "debug")]
 use aya_log_ebpf::info;
@@ -37,6 +41,8 @@ use ulb_common::{
     SESSION_ENTRY_CLIENT,
     SessionEntry,
     SocketCookie,
+    TCP_CLOSE,
+    TCP_CLOSE_WAIT,
     ir::{
         BackendCluster,
         MAX_CLUSTERS,
@@ -157,6 +163,28 @@ pub fn router(ctx: SkBuffContext) -> u32 {
 
         Err(_) => SK_DROP,
     }
+}
+
+#[fentry(function = "tcp_set_state")]
+pub fn session_cleanup(ctx: FEntryContext) -> i32 {
+    let sk: *mut c_void = ctx.arg(0);
+    let next_state: i32 = ctx.arg(1);
+
+    if next_state != TCP_CLOSE && next_state != TCP_CLOSE_WAIT {
+        return 0;
+    }
+
+    let cookie = unsafe { bpf_get_socket_cookie(sk) } as SocketCookie;
+
+    if let Some(&[other_cookie, _entry_type]) = unsafe { SESSION_MAP.get(&cookie) } {
+        let _ = SESSION_MAP.remove(&cookie);
+        let _ = SESSION_MAP.remove(other_cookie);
+
+        #[cfg(feature = "debug")]
+        info!(ctx, "cleaned up session for {cookie}");
+    }
+
+    0
 }
 
 #[cfg(not(test))]

@@ -34,6 +34,10 @@ pub type SessionEntry = [SocketCookie; 2]; // [cookie, SESSION_ENTRY_CLIENT || S
 pub const SESSION_ENTRY_CLIENT: u64 = 0;
 pub const SESSION_ENTRY_BACKEND: u64 = 1;
 
+// linux kernel tcp states
+pub const TCP_CLOSE: i32 = 7;
+pub const TCP_CLOSE_WAIT: i32 = 8;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum HttpMethod {

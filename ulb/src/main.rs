@@ -11,7 +11,10 @@ use aya::{
         ProgramArray,
         SockHash,
     },
-    programs::SkSkb,
+    programs::{
+        FEntry,
+        SkSkb,
+    },
 };
 use log::{
     Level,
@@ -132,6 +135,15 @@ async fn main() -> anyhow::Result<()> {
             .map_err(|_| anyhow!("failed to set `JMP_PROG_ROUTING`"))?,
         0,
     )?;
+
+    // SESSION_MAP cleanup
+    let btf = aya::Btf::from_sys_fs()?;
+    let session_cleanup: &mut FEntry = ebpf
+        .program_mut("session_cleanup")
+        .ok_or_else(|| anyhow!("missing `session_cleanup` prog"))?
+        .try_into()?;
+    session_cleanup.load("tcp_set_state", &btf)?;
+    session_cleanup.attach()?;
 
     // configuration
     let cfg = load_config::<NativeAdapter, _>("./__ulb_config.yaml")?; // TODO:
