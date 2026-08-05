@@ -178,7 +178,7 @@ pub fn session_cleanup(ctx: FEntryContext) -> i32 {
 
     if let Some(&[other_cookie, _entry_type]) = unsafe { SESSION_MAP.get(&cookie) } {
         let _ = SESSION_MAP.remove(&cookie);
-        let _ = SESSION_MAP.remove(other_cookie);
+        let _ = SESSION_MAP.remove(&other_cookie);
 
         #[cfg(feature = "debug")]
         info!(ctx, "cleaned up session for `{}`", cookie);
