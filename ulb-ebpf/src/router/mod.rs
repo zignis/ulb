@@ -62,6 +62,7 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
             {
                 #[cfg(feature = "debug")]
                 info!(&ctx, "failed to insert client to backend session: {}", eno);
+                return Err(());
             }
 
             #[allow(unused_variables)]
@@ -70,6 +71,7 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
             {
                 #[cfg(feature = "debug")]
                 info!(&ctx, "failed to insert backend to client session: {}", eno);
+                return Err(());
             }
 
             if BACKEND_MAP.redirect_skb(ctx, &mut backend_cookie, 0) == (SK_PASS as i64) {
