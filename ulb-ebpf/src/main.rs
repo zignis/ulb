@@ -176,12 +176,16 @@ pub fn session_cleanup(ctx: FEntryContext) -> i32 {
 
     let cookie = unsafe { bpf_get_socket_cookie(sk) } as SocketCookie;
 
-    if let Some(&[other_cookie, _entry_type]) = unsafe { SESSION_MAP.get(&cookie) } {
+    #[allow(unused_variables)]
+    if let Some(&[other_cookie, entry_type]) = unsafe { SESSION_MAP.get(&cookie) } {
         let _ = SESSION_MAP.remove(&cookie);
         let _ = SESSION_MAP.remove(&other_cookie);
 
         #[cfg(feature = "debug")]
-        info!(ctx, "cleaned up session for `{}`", cookie);
+        info!(
+            ctx,
+            "cleaned up session mapping for `{}` ({})", cookie, entry_type
+        );
     }
 
     0
