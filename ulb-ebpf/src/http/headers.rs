@@ -3,8 +3,6 @@ use core::ffi::{
     c_void,
 };
 
-#[cfg(feature = "debug")]
-use aya_ebpf::bpf_printk;
 use aya_ebpf::{
     helpers::{
         bpf_loop,
@@ -25,6 +23,7 @@ use super::{
     HttpParseError,
     skb_data::SkbData,
 };
+use crate::debug;
 
 struct LoopContext<'a> {
     ctx: &'a SkBuffContext,
@@ -53,10 +52,7 @@ pub fn parse_headers(ctx: &SkBuffContext, req: &mut HttpRequest) -> Result<u32, 
         )
     };
 
-    #[cfg(feature = "debug")]
-    unsafe {
-        bpf_printk!(c"[hdr][total]: %d", loop_ctx.req.headers.len);
-    }
+    debug!(&ctx, "total headers parsed: {}", loop_ctx.req.headers.len);
 
     loop_ctx.error.map_or(Ok(req.headers.len), Err)
 }
@@ -186,11 +182,6 @@ fn parse_header(
 
     hdr.value[value_len] = 0;
     hdr.value.len = value_len as u32;
-
-    #[cfg(feature = "debug")]
-    unsafe {
-        bpf_printk!(c"---> [hdr] %s: %s", hdr.key.as_ptr(), hdr.value.as_ptr());
-    }
 
     let last_char = unsafe { data.at_unchecked(value_start + value_len) };
     let delimiter_size = 1 + (last_char == b'\r') as usize;
