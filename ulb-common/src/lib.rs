@@ -155,7 +155,7 @@ impl HttpRequest {
 pub struct RequestTrace {
     pub cookie: SocketCookie,
     pub parsed: bool,
-    pub method: Option<HttpMethod>,
+    pub method: HttpMethod,
     pub uri: BoundedStr<HTTP_URI_MAX_LEN>,
 }
 
@@ -165,7 +165,7 @@ impl Default for RequestTrace {
         Self {
             cookie: 0,
             parsed: false,
-            method: None,
+            method: HttpMethod::Get,
             uri: Default::default(),
         }
     }
