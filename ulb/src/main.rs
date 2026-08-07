@@ -193,12 +193,16 @@ async fn main() -> anyhow::Result<()> {
                 let (mut stream, peer_addr) = res?;
                 info!("accepted {peer_addr}");
 
+                stream
+                    .set_nodelay(true)
+                    .map_err(|err| error!("failed to set nodelay: {err}"))?;
+
                 let fd = stream.as_raw_fd();
                 let cookie = get_socket_cookie(fd)?;
 
-                if let Err(err) = connection_map.insert(cookie, fd, 0) {
-                    error!("failed to insert client into CONNECTION_MAP: {err}");
-                }
+                connection_map
+                    .insert(cookie, fd, 0)
+                    .map_err(|err| error!("failed to insert client into CONNECTION_MAP: {err}"))?;
 
                 clients.spawn(async move {
                     let mut buf = [0u8; 1];

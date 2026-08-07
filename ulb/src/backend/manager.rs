@@ -239,6 +239,10 @@ impl BackendManager {
         let fd = stream.as_raw_fd();
         let cookie = get_socket_cookie(fd)?;
 
+        stream
+            .set_nodelay(true)
+            .map_err(|err| anyhow!("failed to set nodelay: {err}"))?;
+
         backend_map
             .insert(cookie, fd, 0)
             .map_err(|err| anyhow!("failed to insert socket into BACKEND_MAP: {err}"))?;
