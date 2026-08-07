@@ -53,9 +53,6 @@ use ulb_common::{
     },
 };
 
-#[cfg(feature = "debug")]
-use crate::log::get_req_trace_mut;
-
 //
 
 #[map]
@@ -122,12 +119,7 @@ pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
 
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
 
-    #[cfg(feature = "debug")]
-    if let Some(trace) = get_req_trace_mut() {
-        trace.cookie = cookie;
-        trace.parsed = false;
-        debug!(&ctx, "connection arrived for verdict ({}B)", ctx.len());
-    }
+    debug!(&ctx, "connection arrived for verdict ({}B)", ctx.len());
 
     // fast-path
     if let Some([mut key, kind]) = unsafe { SESSION_MAP.get(&cookie) }.copied() {
