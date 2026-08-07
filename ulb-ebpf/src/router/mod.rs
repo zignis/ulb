@@ -32,8 +32,7 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
     let vhost = match vhost::resolve_vhost(req) {
         Some(x) => x,
         None => {
-            #[cfg(feature = "debug")]
-            info!(&ctx, "no vhost match");
+            debug!(&ctx, "no vhost matched");
             return Ok(SK_PASS);
         }
     };
@@ -41,16 +40,14 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
     let route = match route::match_route(req, vhost) {
         Some(x) => x,
         None => {
-            #[cfg(feature = "debug")]
-            info!(&ctx, "no route match");
+            debug!(&ctx, "no route matched");
             return Ok(SK_PASS);
         }
     };
 
     match route.action {
         RouteAction::Forward { cluster_idx } => {
-            #[cfg(feature = "debug")]
-            info!(&ctx, "routing to cluster {}", cluster_idx);
+            debug!(&ctx, "routing to cluster {}", cluster_idx);
 
             let mut backend_cookie = cluster::select_backend(cluster_idx)?;
             let client_cookie =
@@ -60,8 +57,7 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
             if let Err(eno) =
                 SESSION_MAP.insert(&client_cookie, &[backend_cookie, SESSION_ENTRY_BACKEND], 0)
             {
-                #[cfg(feature = "debug")]
-                info!(&ctx, "failed to insert client to backend session: {}", eno);
+                debug!(&ctx, "failed to insert client->backend session ({})", eno);
                 return Err(());
             }
 
@@ -69,8 +65,7 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
             if let Err(eno) =
                 SESSION_MAP.insert(&backend_cookie, &[client_cookie, SESSION_ENTRY_CLIENT], 0)
             {
-                #[cfg(feature = "debug")]
-                info!(&ctx, "failed to insert backend to client session: {}", eno);
+                debug!(&ctx, "failed to insert backend->client session ({})", eno);
                 return Err(());
             }
 
@@ -78,13 +73,11 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
                 return Ok(SK_PASS);
             }
 
-            #[cfg(feature = "debug")]
-            info!(&ctx, "routing failure");
+            debug!(&ctx, "routing failed");
         }
 
         RouteAction::Drop => {
-            #[cfg(feature = "debug")]
-            info!(&ctx, "req dropped due to drop action");
+            debug!(&ctx, "dropped due to drop action");
         }
     }
 

@@ -2,6 +2,8 @@
 #![no_main]
 
 mod http;
+#[cfg(feature = "debug")]
+mod log;
 mod router;
 
 use aya_ebpf::{
@@ -53,6 +55,9 @@ use ulb_common::{
         VHostValue,
     },
 };
+
+#[cfg(feature = "debug")]
+use crate::log::get_req_trace_mut;
 
 //
 
@@ -118,10 +123,14 @@ pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
         return SK_DROP;
     }
 
-    #[cfg(feature = "debug")]
-    info!(&ctx, "stream_verdict triggered, skb_size={}", ctx.len());
-
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
+
+    #[cfg(feature = "debug")]
+    if let Some(trace) = get_req_trace_mut() {
+        trace.cookie = cookie;
+        trace.parsed = false;
+        debug!(&ctx, "connection arrived for verdict ({}B)", ctx.len());
+    }
 
     // fast-path
     if let Some([mut key, kind]) = unsafe { SESSION_MAP.get(&cookie) }.copied() {
@@ -145,8 +154,7 @@ pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
         JMP_TABLE.tail_call(&ctx, JMP_PROG_ROUTING);
     }
 
-    #[cfg(feature = "debug")]
-    info!(&ctx, "router tail call failed");
+    debug!(&ctx, "tail call to router failed");
 
     // TODO: change default action
     SK_DROP
@@ -154,15 +162,7 @@ pub fn stream_verdict(ctx: SkBuffContext) -> u32 {
 
 #[stream_verdict]
 pub fn router(ctx: SkBuffContext) -> u32 {
-    match router::route_req(&ctx) {
-        Ok(action) => {
-            #[cfg(feature = "debug")]
-            info!(&ctx, "req routed");
-            action
-        }
-
-        Err(_) => SK_DROP,
-    }
+    router::route_req(&ctx).unwrap_or(SK_DROP)
 }
 
 #[fentry(function = "tcp_set_state")]
@@ -176,15 +176,24 @@ pub fn session_cleanup(ctx: FEntryContext) -> i32 {
 
     let cookie = unsafe { bpf_get_socket_cookie(sk) } as SocketCookie;
 
-    #[allow(unused_variables)]
-    if let Some(&[other_cookie, entry_type]) = unsafe { SESSION_MAP.get(&cookie) } {
-        let _ = SESSION_MAP.remove(&cookie);
-        let _ = SESSION_MAP.remove(&other_cookie);
+    if let Some(&[other_cookie, _entry_type]) = unsafe { SESSION_MAP.get(&cookie) } {
+        if let Err(eno) = SESSION_MAP.remove(&cookie) {
+            debug!(
+                ctx,
+                "failed to remove session mapping [{} -> {}] ({})", cookie, other_cookie, eno
+            );
+        }
 
-        #[cfg(feature = "debug")]
-        info!(
+        if let Err(eno) = SESSION_MAP.remove(&other_cookie) {
+            debug!(
+                ctx,
+                "failed to remove session mapping [{} -> {}] ({})", other_cookie, cookie, eno
+            );
+        }
+
+        debug!(
             ctx,
-            "cleaned up session mapping for `{}` ({})", cookie, entry_type
+            "cleared session mapping [{}, {}]", cookie, other_cookie
         );
     }
 

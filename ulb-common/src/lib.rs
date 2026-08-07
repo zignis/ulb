@@ -148,3 +148,25 @@ impl HttpRequest {
         self.headers.len = 0;
     }
 }
+
+#[cfg(feature = "debug")]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct RequestTrace {
+    pub cookie: SocketCookie,
+    pub parsed: bool,
+    pub method: Option<HttpMethod>,
+    pub uri: BoundedStr<HTTP_URI_MAX_LEN>,
+}
+
+#[cfg(feature = "debug")]
+impl Default for RequestTrace {
+    fn default() -> Self {
+        Self {
+            cookie: 0,
+            parsed: false,
+            method: None,
+            uri: Default::default(),
+        }
+    }
+}
