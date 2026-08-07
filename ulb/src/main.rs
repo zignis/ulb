@@ -190,19 +190,34 @@ async fn main() -> anyhow::Result<()> {
     loop {
         tokio::select! {
             res = listener.accept() => {
-                let (mut stream, peer_addr) = res?;
-                info!("accepted {peer_addr}");
+                let (mut stream, peer_addr) = match res {
+                    Ok(x) => x,
+                    Err(err) => {
+                        error!("failed to accept client: {err}");
+                        continue;
+                    }
+                };
 
-                stream
-                    .set_nodelay(true)
-                    .map_err(|err| error!("failed to set nodelay: {err}"))?;
+                info!("accepted client: {peer_addr}");
+
+                if let Err(err) = stream.set_nodelay(true) {
+                    error!("failed to set nodelay: {err}");
+                    continue;
+                }
 
                 let fd = stream.as_raw_fd();
-                let cookie = get_socket_cookie(fd)?;
+                let cookie = match get_socket_cookie(fd) {
+                    Ok(x) => x,
+                    Err(err) => {
+                        error!("failed to get client socket cookie: {err}");
+                        continue;
+                    }
+                };
 
-                connection_map
-                    .insert(cookie, fd, 0)
-                    .map_err(|err| error!("failed to insert client into CONNECTION_MAP: {err}"))?;
+                if let Err(err) = connection_map.insert(cookie, fd, 0) {
+                    error!("failed to insert client into CONNECTION_MAP: {err}");
+                    continue;
+                }
 
                 clients.spawn(async move {
                     let mut buf = [0u8; 1];
