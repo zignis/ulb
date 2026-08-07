@@ -7,8 +7,6 @@ use aya_ebpf::{
     helpers::bpf_get_socket_cookie,
     programs::SkBuffContext,
 };
-#[cfg(feature = "debug")]
-use aya_log_ebpf::info;
 use ulb_common::{
     SESSION_ENTRY_BACKEND,
     SESSION_ENTRY_CLIENT,
@@ -19,6 +17,7 @@ use ulb_common::{
 use crate::{
     BACKEND_MAP,
     SESSION_MAP,
+    debug,
     http::get_http_buf,
 };
 

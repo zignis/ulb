@@ -2,7 +2,6 @@
 #![no_main]
 
 mod http;
-#[cfg(feature = "debug")]
 mod log;
 mod router;
 
