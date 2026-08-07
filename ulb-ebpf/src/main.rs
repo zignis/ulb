@@ -32,8 +32,6 @@ use aya_ebpf::{
         SkBuffContext,
     },
 };
-#[cfg(feature = "debug")]
-use aya_log_ebpf::info;
 use http::SkbData;
 use ulb_common::{
     HTTP_REQ_MAX_SCRATCH_SIZE,

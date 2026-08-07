@@ -3,8 +3,6 @@ use aya_ebpf::{
     maps::PerCpuArray,
     programs::SkBuffContext,
 };
-#[cfg(feature = "debug")]
-use aya_log_ebpf::info;
 use ulb_common::HttpRequest;
 
 mod get_http_buf;
