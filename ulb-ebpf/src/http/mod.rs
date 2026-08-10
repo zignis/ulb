@@ -44,11 +44,13 @@ impl HttpParseError {
 pub fn parse_req(ctx: &SkBuffContext) -> Result<(), ()> {
     let req = get_http_buf().ok_or(())?;
 
+    #[allow(unused_variables)]
     if let Err(err) = parse_request_line(ctx, req) {
         debug!(&ctx, "failed to parse request line: {}", err.as_str());
         return Err(());
     }
 
+    #[allow(unused_variables)]
     if let Err(err) = parse_headers(ctx, req) {
         debug!(&ctx, "failed to parse header: {}", err.as_str());
         return Err(());
