@@ -29,7 +29,7 @@ pub const HTTP_HDR_VAL_MAX_LEN: usize = 64;
 pub const HTTP_URI_MAX_LEN: usize = 256;
 
 pub type SocketCookie = u64;
-pub type SessionEntry = [SocketCookie; 2]; // [cookie, SESSION_ENTRY_CLIENT || SESSION_ENTRY_BACKEND]
+pub type SessionEntry = [SocketCookie; 2]; // [cookie, typeof cookie = SESSION_ENTRY_CLIENT || SESSION_ENTRY_BACKEND]
 
 pub const SESSION_ENTRY_CLIENT: u64 = 0;
 pub const SESSION_ENTRY_BACKEND: u64 = 1;
