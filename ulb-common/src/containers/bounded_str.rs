@@ -20,16 +20,12 @@ pub struct BoundedStr<const MAX_SIZE: usize> {
 
 impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
     pub fn clear_and_copy(&mut self, src: BoundedStr<MAX_SIZE>) {
-        let len = src.len;
-        self.len = len;
-        self.data = [0; MAX_SIZE];
+        let len = src.len as usize;
+        self.len = src.len;
 
-        for i in 0..MAX_SIZE {
-            if i >= len as usize {
-                break;
-            }
-
-            self.data[i] = src.data[i];
+        if len <= MAX_SIZE {
+            self.data[..len].copy_from_slice(&src.data[..len]);
+            self.data[len..].fill(0);
         }
     }
 }
