@@ -11,6 +11,9 @@ use ulb_common::{
 };
 
 use super::{
+    CH_CR,
+    CH_LF,
+    CH_SP,
     HttpParseError,
     skb_data::SkbData,
 };
@@ -26,7 +29,7 @@ fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
 
     for i in 0..(METHOD_MAX_LEN + 1) {
         match data.at(i) {
-            Some(b' ') => {
+            Some(CH_SP) => {
                 space = i;
                 break;
             }
@@ -40,6 +43,7 @@ fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
     }
 
     let method = match space {
+        // TODO: can be optimzied by casting bytes as integer and matching on them
         3 if data.slice(0) == Some(b"GET") => HttpMethod::Get,
         3 if data.slice(0) == Some(b"PUT") => HttpMethod::Put,
         4 if data.slice(0) == Some(b"HEAD") => HttpMethod::Head,
@@ -60,7 +64,7 @@ fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
 fn parse_uri_len(data: SkbData, uri_start: usize) -> Result<usize, HttpParseError> {
     for i in 0..HTTP_URI_MAX_LEN {
         match data.at(uri_start + i) {
-            Some(b' ') => {
+            Some(CH_SP) => {
                 return if i == 0 {
                     Err(HttpParseError::InvalidUri)
                 } else {
@@ -96,8 +100,8 @@ fn parse_version(
     let line_end = version_start + HTTP_VERSION_PREFIX_LEN + 1;
 
     match unsafe { data.at_unchecked(line_end) } {
-        b'\r' => Ok((version, line_end + 2)), // standard crlf eol
-        b'\n' => Ok((version, line_end + 1)), // eol with only lf
+        CH_CR => Ok((version, line_end + 2)), // standard crlf eol
+        CH_LF => Ok((version, line_end + 1)), // eol with only lf
         _ => Err(HttpParseError::InvalidVersion),
     }
 }

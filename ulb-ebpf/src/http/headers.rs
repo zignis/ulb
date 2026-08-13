@@ -20,6 +20,10 @@ use ulb_common::{
 };
 
 use super::{
+    CH_COLON,
+    CH_CR,
+    CH_LF,
+    CH_SP,
     HttpParseError,
     skb_data::SkbData,
 };
@@ -76,6 +80,7 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
                 return 1;
             }
 
+            // TODO: impl case-insensitive matching for host header
             if hdr.key.len == 4 && (&hdr.key[..4] == b"host" || &hdr.key[..4] == b"Host") {
                 // host bytes must be zeroed out for valid hashing
                 loop_ctx.req.host.clear_and_copy(hdr.value);
@@ -107,7 +112,7 @@ fn parse_header(
     }
 
     match data.at(offset) {
-        Some(b'\r') | Some(b'\n') | None => return Ok(0),
+        Some(CH_CR) | Some(CH_LF) | None => return Ok(0),
         _ => {}
     }
 
@@ -116,7 +121,7 @@ fn parse_header(
 
     for i in 0..HTTP_HDR_KEY_MAX_LEN {
         match data.at(offset + i) {
-            Some(b':') => {
+            Some(CH_COLON) => {
                 colon_pos = i;
                 break;
             }
@@ -149,13 +154,13 @@ fn parse_header(
     let mut value_start = offset + colon_pos + 1;
 
     // space after colon
-    if data.at(value_start) == Some(b' ') {
+    if data.at(value_start) == Some(CH_SP) {
         value_start += 1;
     }
 
     for i in 0..HTTP_HDR_VAL_MAX_LEN {
         match data.at(value_start + i) {
-            Some(b'\r') | Some(b'\n') => {
+            Some(CH_CR) | Some(CH_LF) => {
                 value_len = i;
                 break;
             }
@@ -184,7 +189,7 @@ fn parse_header(
     hdr.value.len = value_len as u32;
 
     let last_char = unsafe { data.at_unchecked(value_start + value_len) };
-    let delimiter_size = 1 + (last_char == b'\r') as usize;
+    let delimiter_size = 1 + (last_char == CH_CR) as usize;
 
     Ok((value_start + value_len + delimiter_size - offset) as u32)
 }

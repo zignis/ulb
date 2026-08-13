@@ -15,6 +15,11 @@ use headers::*;
 use request_line::*;
 pub use skb_data::*;
 
+pub const CH_CR: u8 = b'\r';
+pub const CH_LF: u8 = b'\n';
+pub const CH_SP: u8 = b' ';
+pub const CH_COLON: u8 = b':';
+
 use crate::debug;
 
 /// shared per-cpu slot holding the parsed http request for the current packet
@@ -29,8 +34,8 @@ pub enum HttpParseError {
     Internal,
 }
 
-#[cfg(feature = "debug")]
 impl HttpParseError {
+    #[cfg(feature = "debug")]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::InvalidMethod => "invalid method",
