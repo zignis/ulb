@@ -1,5 +1,7 @@
 #[cfg(target_os = "linux")]
 use core::ffi::c_void;
+#[cfg(target_os = "linux")]
+use std::io::Error;
 use std::os::fd::RawFd;
 
 #[cfg(target_os = "linux")]
@@ -24,15 +26,18 @@ pub fn get_socket_cookie(fd: RawFd) -> anyhow::Result<SocketCookie> {
             &mut cookie as *mut _ as *mut c_void,
             &mut optlen,
         )
-    } == 0
+    } < 0
     {
-        Ok(cookie)
+        Err(anyhow::anyhow!(
+            "failed to get socket cookie: {}",
+            Error::last_os_error()
+        ))
     } else {
-        Err(anyhow::anyhow!("`get_socket_cookie` failed"))
+        Ok(cookie)
     }
 }
 
 #[cfg(not(target_os = "linux"))]
 pub fn get_socket_cookie(_fd: RawFd) -> anyhow::Result<SocketCookie> {
-    unimplemented!("`get_socket_cookie`: SO_COOKIE is only available on Linux");
+    compile_error!("SO_COOKIE is only available on Linux");
 }
