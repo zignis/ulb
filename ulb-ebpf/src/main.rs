@@ -44,8 +44,12 @@ use ulb_common::{
     TCP_CLOSE_WAIT,
     ir::{
         BackendCluster,
+        MAX_BACKEND_PORTS,
         MAX_CLUSTERS,
+        MAX_CONNECTIONS,
+        MAX_LISTENER_PORTS,
         MAX_ROUTES,
+        MAX_SESSIONS,
         MAX_VHOSTS,
         RouteValue,
         VHostKey,
@@ -59,13 +63,14 @@ use ulb_common::{
 static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COUNT, 0);
 
 #[map]
-static BACKEND_MAP: SockHash<SocketCookie> = SockHash::with_max_entries(1024, 0);
+static BACKEND_MAP: SockHash<SocketCookie> = SockHash::with_max_entries(MAX_BACKEND_PORTS, 0);
 
 #[map]
-static CONNECTION_MAP: SockHash<SocketCookie> = SockHash::with_max_entries(1024, 0);
+static CONNECTION_MAP: SockHash<SocketCookie> = SockHash::with_max_entries(MAX_CONNECTIONS, 0);
 
 #[map]
-static SESSION_MAP: HashMap<SocketCookie, SessionEntry> = HashMap::with_max_entries(4096, 0);
+static SESSION_MAP: HashMap<SocketCookie, SessionEntry> =
+    HashMap::with_max_entries(MAX_SESSIONS, 0);
 
 #[map]
 static VHOST_MAP: HashMap<VHostKey, VHostValue> = HashMap::with_max_entries(MAX_VHOSTS, 0);
@@ -75,6 +80,12 @@ static ROUTE_TABLE: Array<RouteValue> = Array::with_max_entries(MAX_ROUTES, 0);
 
 #[map]
 static CLUSTER_TABLE: Array<BackendCluster> = Array::with_max_entries(MAX_CLUSTERS, 0);
+
+#[map]
+static LISTENER_PORTS: HashMap<u32, u8> = HashMap::with_max_entries(MAX_LISTENER_PORTS, 0);
+
+#[map]
+static BACKEND_PORTS: HashMap<u32, u8> = HashMap::with_max_entries(MAX_BACKEND_PORTS, 0);
 
 //
 
