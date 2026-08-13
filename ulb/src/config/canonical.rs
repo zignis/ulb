@@ -40,6 +40,7 @@ pub struct RouteConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterConfig {
     pub name: String,
+    pub pool_size: Option<usize>,
     pub endpoints: Vec<EndpointConfig>,
 }
 
