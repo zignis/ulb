@@ -20,8 +20,8 @@ use crate::{
     debug,
     http::parse_req,
     maps::{
-        BACKEND_MAP,
-        CONNECTION_MAP,
+        BACKEND_CONNECTION_MAP,
+        CLIENT_CONNECTION_MAP,
         JMP_TABLE,
         SESSION_MAP,
     },
@@ -41,11 +41,11 @@ fn stream_verdict(ctx: SkBuffContext) -> u32 {
     // fast-path
     if let Some([mut key, kind]) = unsafe { SESSION_MAP.get(&cookie) }.copied() {
         if kind == SESSION_ENTRY_CLIENT {
-            if CONNECTION_MAP.redirect_skb(&ctx, &mut key, 0) == (SK_PASS as i64) {
+            if CLIENT_CONNECTION_MAP.redirect_skb(&ctx, &mut key, 0) == (SK_PASS as i64) {
                 return SK_PASS;
             }
         } else {
-            if BACKEND_MAP.redirect_skb(&ctx, &mut key, 0) == (SK_PASS as i64) {
+            if BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut key, 0) == (SK_PASS as i64) {
                 return SK_PASS;
             }
         }

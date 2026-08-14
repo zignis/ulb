@@ -15,12 +15,12 @@ use ulb_common::{
     SocketCookie,
     ir::{
         BackendCluster,
-        MAX_BACKEND_PORTS,
+        MAX_BACKEND_CONNECTIONS,
+        MAX_CLIENT_CONNECTIONS,
         MAX_CLUSTERS,
-        MAX_CONNECTIONS,
-        MAX_LISTENER_PORTS,
         MAX_ROUTES,
         MAX_SESSIONS,
+        MAX_TCP_PORTS,
         MAX_VHOSTS,
         RouteValue,
         VHostKey,
@@ -40,10 +40,12 @@ pub static HTTP_REQ_BUF: PerCpuArray<HttpRequest> = PerCpuArray::with_max_entrie
 //
 
 #[map]
-pub static BACKEND_MAP: SockHash<SocketCookie> = SockHash::with_max_entries(MAX_BACKEND_PORTS, 0);
+pub static BACKEND_CONNECTION_MAP: SockHash<SocketCookie> =
+    SockHash::with_max_entries(MAX_BACKEND_CONNECTIONS, 0);
 
 #[map]
-pub static CONNECTION_MAP: SockHash<SocketCookie> = SockHash::with_max_entries(MAX_CONNECTIONS, 0);
+pub static CLIENT_CONNECTION_MAP: SockHash<SocketCookie> =
+    SockHash::with_max_entries(MAX_CLIENT_CONNECTIONS, 0);
 
 #[map]
 pub static SESSION_MAP: HashMap<SocketCookie, SessionEntry> =
@@ -61,7 +63,4 @@ pub static CLUSTER_TABLE: Array<BackendCluster> = Array::with_max_entries(MAX_CL
 //
 
 #[map]
-pub static LISTENER_PORTS: HashMap<u32, u8> = HashMap::with_max_entries(MAX_LISTENER_PORTS, 0);
-
-#[map]
-pub static BACKEND_PORTS: HashMap<u32, u8> = HashMap::with_max_entries(MAX_BACKEND_PORTS, 0);
+pub static LISTENER_PORTS: Array<u8> = Array::with_max_entries(MAX_TCP_PORTS, 0);
