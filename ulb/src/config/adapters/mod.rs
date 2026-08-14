@@ -18,7 +18,7 @@ pub trait ConfigAdapter {
         P: AsRef<Path>,
     {
         fs::read_to_string(&path)
-            .with_context(|| format!("failed to read config file: {}", path.as_ref().display()))
+            .with_context(|| format!("failed to read config file: `{}`", path.as_ref().display()))
     }
 
     fn parse(content: String) -> Result<UlbConfig>;
