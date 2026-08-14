@@ -12,8 +12,9 @@ use aya::{
         SockHash,
     },
     programs::{
-        FEntry,
+        CgroupAttachMode,
         SkSkb,
+        SockOps,
     },
 };
 use log::{
@@ -65,6 +66,8 @@ async fn main() -> anyhow::Result<()> {
         println!("RUST_LOG: info level logging is not enabled");
     }
 
+    println!("launching...");
+
     let mut ebpf = aya::Ebpf::load(aya::include_bytes_aligned!(concat!(
         env!("OUT_DIR"),
         "/ulb"
@@ -91,13 +94,13 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let connection_map: SockHash<_, SocketCookie> = SockHash::try_from(
-        ebpf.take_map("CONNECTION_MAP")
-            .ok_or_else(|| anyhow!("missing `CONNECTION_MAP`"))?,
+        ebpf.take_map("CLIENT_CONNECTION_MAP")
+            .ok_or_else(|| anyhow!("missing `CLIENT_CONNECTION_MAP`"))?,
     )?;
 
     let mut backend_map: SockHash<_, SocketCookie> = SockHash::try_from(
-        ebpf.take_map("BACKEND_MAP")
-            .ok_or_else(|| anyhow!("missing `BACKEND_MAP`"))?,
+        ebpf.take_map("BACKEND_CONNECTION_MAP")
+            .ok_or_else(|| anyhow!("missing `BACKEND_CONNECTION_MAP`"))?,
     )?;
 
     let parser: &mut SkSkb = ebpf
@@ -136,14 +139,14 @@ async fn main() -> anyhow::Result<()> {
         0,
     )?;
 
-    // SESSION_MAP cleanup
-    let btf = aya::Btf::from_sys_fs()?;
-    let session_cleanup: &mut FEntry = ebpf
-        .program_mut("session_cleanup")
-        .ok_or_else(|| anyhow!("missing `session_cleanup` prog"))?
+    // TODO: make cgroup configurable
+    let cgroup = std::fs::File::open("/sys/fs/cgroup")?;
+    let sock_ops: &mut SockOps = ebpf
+        .program_mut("sock_ops")
+        .ok_or_else(|| anyhow!("missing `sock_ops` prog"))?
         .try_into()?;
-    session_cleanup.load("tcp_set_state", &btf)?;
-    session_cleanup.attach()?;
+    sock_ops.load()?;
+    sock_ops.attach(cgroup, CgroupAttachMode::Single)?;
 
     // configuration
     let cfg = load_config::<NativeAdapter, _>("./__ulb_config.yaml")?; // TODO:
