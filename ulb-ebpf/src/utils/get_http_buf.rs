@@ -1,6 +1,6 @@
 use ulb_common::HttpRequest;
 
-use super::HTTP_REQ_BUF;
+use crate::maps::HTTP_REQ_BUF;
 
 pub fn get_http_buf<'a>() -> Option<&'a mut HttpRequest> {
     let ptr = HTTP_REQ_BUF.get_ptr_mut(0)?;
