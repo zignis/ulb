@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut connection_map: SockHash<_, SocketCookie> = SockHash::try_from(
+    let connection_map: SockHash<_, SocketCookie> = SockHash::try_from(
         ebpf.take_map("CONNECTION_MAP")
             .ok_or_else(|| anyhow!("missing `CONNECTION_MAP`"))?,
     )?;
