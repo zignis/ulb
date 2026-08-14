@@ -10,54 +10,69 @@ use ulb_common::{
     HttpVersion,
 };
 
-use super::{
-    CH_CR,
-    CH_LF,
-    CH_SP,
-    HttpParseError,
-    skb_data::SkbData,
+use crate::{
+    http::{
+        CH_CR,
+        CH_LF,
+        CH_SP,
+        HttpParseError,
+    },
+    utils::{
+        SkbData,
+        b16,
+        b32,
+    },
 };
 
-const METHOD_MAX_LEN: usize = 7; // `OPTIONS` & `CONNECT` are the longest methods
 const HTTP_VERSION_MIN_LEN: usize = 10; // HTTP/1.1\r\n
 const HTTP_VERSION_PREFIX_LEN: usize = 7; // HTTP/1.
 
-// TODO: http/2 parsing
+// methods
+
+const GET_SP: u32 = b32(b"GET ");
+const PUT_SP: u32 = b32(b"PUT ");
+const POST: u32 = b32(b"POST");
+const HEAD: u32 = b32(b"HEAD");
+// PATCH
+const PATC: u32 = b32(b"PATC");
+const H_SP: u16 = b16(b"H ");
+// TRACE
+const TRAC: u32 = b32(b"TRAC");
+const E_SP: u16 = b16(b"E ");
+// QUERY
+const QUER: u32 = b32(b"QUER");
+const Y_SP: u16 = b16(b"Y ");
+// DELETE
+const DELE: u32 = b32(b"DELE");
+const TE: u16 = b16(b"TE");
+// OPTIONS
+const OPTI: u32 = b32(b"OPTI");
+const ONS_SP: u32 = b32(b"ONS ");
+// CONNECT
+const CONN: u32 = b32(b"CONN");
+const ECT_SP: u32 = b32(b"ECT ");
 
 fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
-    let mut space = 0;
-
-    for i in 0..(METHOD_MAX_LEN + 1) {
-        match data.at(i) {
-            Some(CH_SP) => {
-                space = i;
-                break;
-            }
-            Some(_) => {}
-            None => return Err(HttpParseError::InvalidMethod),
-        }
+    let prefix = data.read_u32(0).ok_or(HttpParseError::InvalidMethod)?;
+    match prefix {
+        //
+        GET_SP => Ok((HttpMethod::Get, 3)),
+        PUT_SP => Ok((HttpMethod::Put, 3)),
+        //
+        POST if data.match_u8(4, CH_SP) => Ok((HttpMethod::Post, 4)),
+        HEAD if data.match_u8(4, CH_SP) => Ok((HttpMethod::Head, 4)),
+        //
+        PATC if data.match_u16(4, H_SP) => Ok((HttpMethod::Patch, 5)),
+        TRAC if data.match_u16(4, E_SP) => Ok((HttpMethod::Trace, 5)),
+        QUER if data.match_u16(4, Y_SP) => Ok((HttpMethod::Query, 5)),
+        //
+        DELE if data.match_u16(4, TE) && data.match_u8(6, CH_SP) => Ok((HttpMethod::Delete, 6)),
+        //
+        OPTI if data.match_u32(4, ONS_SP) => Ok((HttpMethod::Options, 7)),
+        CONN if data.match_u32(4, ECT_SP) => Ok((HttpMethod::Connect, 7)),
+        //
+        _ => Err(HttpParseError::InvalidMethod),
     }
-
-    if space == 0 {
-        return Err(HttpParseError::InvalidMethod);
-    }
-
-    let method = match space {
-        // TODO: can be optimzied by casting bytes as integer and matching on them
-        3 if data.slice(0) == Some(b"GET") => HttpMethod::Get,
-        3 if data.slice(0) == Some(b"PUT") => HttpMethod::Put,
-        4 if data.slice(0) == Some(b"HEAD") => HttpMethod::Head,
-        4 if data.slice(0) == Some(b"POST") => HttpMethod::Post,
-        5 if data.slice(0) == Some(b"PATCH") => HttpMethod::Patch,
-        5 if data.slice(0) == Some(b"TRACE") => HttpMethod::Trace,
-        5 if data.slice(0) == Some(b"QUERY") => HttpMethod::Query,
-        6 if data.slice(0) == Some(b"DELETE") => HttpMethod::Delete,
-        7 if data.slice(0) == Some(b"CONNECT") => HttpMethod::Connect,
-        7 if data.slice(0) == Some(b"OPTIONS") => HttpMethod::Options,
-        _ => return Err(HttpParseError::InvalidMethod),
-    };
-
-    Ok((method, space))
 }
 
 #[inline(never)]

@@ -19,15 +19,17 @@ use ulb_common::{
     HttpRequest,
 };
 
-use super::{
-    CH_COLON,
-    CH_CR,
-    CH_LF,
-    CH_SP,
-    HttpParseError,
-    skb_data::SkbData,
+use crate::{
+    debug,
+    http::{
+        CH_COLON,
+        CH_CR,
+        CH_LF,
+        CH_SP,
+        HttpParseError,
+    },
+    utils::SkbData,
 };
-use crate::debug;
 
 struct LoopContext<'a> {
     ctx: &'a SkBuffContext,
