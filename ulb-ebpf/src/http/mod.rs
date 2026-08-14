@@ -1,30 +1,23 @@
-use aya_ebpf::{
-    macros::map,
-    maps::PerCpuArray,
-    programs::SkBuffContext,
-};
-use ulb_common::HttpRequest;
+use aya_ebpf::programs::SkBuffContext;
 
-mod get_http_buf;
 mod headers;
 mod request_line;
-mod skb_data;
 
-pub use get_http_buf::*;
 use headers::*;
 use request_line::*;
-pub use skb_data::*;
 
-pub const CH_CR: u8 = b'\r';
-pub const CH_LF: u8 = b'\n';
-pub const CH_SP: u8 = b' ';
-pub const CH_COLON: u8 = b':';
+use crate::{
+    debug,
+    utils::{
+        b8,
+        get_http_buf,
+    },
+};
 
-use crate::debug;
-
-/// shared per-cpu slot holding the parsed http request for the current packet
-#[map]
-pub static HTTP_REQ_BUF: PerCpuArray<HttpRequest> = PerCpuArray::with_max_entries(1, 0);
+pub const CH_CR: u8 = b8(b"\r");
+pub const CH_LF: u8 = b8(b"\n");
+pub const CH_SP: u8 = b8(b" ");
+pub const CH_COLON: u8 = b8(b":");
 
 #[derive(Debug)]
 pub enum HttpParseError {

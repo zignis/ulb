@@ -9,7 +9,7 @@ use ulb_common::{
     },
 };
 
-use crate::ROUTE_TABLE;
+use crate::maps::ROUTE_TABLE;
 
 pub fn match_route(req: &HttpRequest, vhost: &VHostValue) -> Option<&'static RouteValue> {
     let start = vhost.route_start;
