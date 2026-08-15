@@ -45,6 +45,8 @@ impl SkbData {
         unsafe { *self.start.add(index) }
     }
 
+    // TODO: remove once used somewhere
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn slice<const N: usize>(&self, offset: usize) -> Option<&[u8; N]> {
         let ptr = unsafe { self.start.add(offset) };
@@ -78,6 +80,8 @@ impl SkbData {
         self.match_u8_unchecked(offset, value)
     }
 
+    // TODO: remove once used somewhere
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn read_u8(&self, offset: usize) -> Option<u8> {
         if self.is_length_out_of_bounds(offset + size_of::<u8>()) {
@@ -105,6 +109,8 @@ impl SkbData {
         self.match_u16_unchecked(offset, value)
     }
 
+    // TODO: remove once used somewhere
+    #[allow(dead_code)]
     #[inline(always)]
     pub fn read_u16(&self, offset: usize) -> Option<u16> {
         if self.is_length_out_of_bounds(offset + size_of::<u16>()) {
