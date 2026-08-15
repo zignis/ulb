@@ -60,5 +60,8 @@ pub fn select_backend(
     }
 
     debug!(ctx, "no backend available");
+
+    // TODO(future): fallback to userspace proxy when no backend are available
+
     Err(())
 }

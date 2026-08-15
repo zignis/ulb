@@ -101,12 +101,14 @@ impl BackendManager {
 
         for (idx, cluster_cfg) in cfg.clusters.iter().enumerate() {
             let mut cookies = Vec::new();
+            // TODO: temporary wrong default value for pool_size
             let pool_size = cluster_cfg.pool_size.unwrap_or(MAX_BACKENDS_PER_CLUSTER);
 
             for endpoint in &cluster_cfg.endpoints {
                 let addr: SocketAddr = endpoint.addr.parse()?;
                 let mut join_set = JoinSet::new();
 
+                // TODO: separate map for pool of individual backend?
                 for _ in 0..pool_size {
                     join_set.spawn(async move { TcpStream::connect(&addr).await });
                 }
@@ -284,7 +286,7 @@ impl BackendManager {
             loop {
                 match stream.read(&mut buf).await {
                     Ok(0) | Err(_) => {
-                        info!("connection closed/error for {addr}");
+                        info!("connection closed for {addr}");
 
                         // TODO: add max reconnect attempt limit
                         let _ = tx_event.send(ManagerEvent::Disconnect {
