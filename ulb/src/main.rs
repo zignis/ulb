@@ -25,7 +25,6 @@ use log::{
     Level,
     info,
     log_enabled,
-    warn,
 };
 use tokio::{
     io::AsyncReadExt,
