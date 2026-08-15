@@ -35,7 +35,8 @@ fn stream_parser(ctx: SkBuffContext) -> u32 {
         )
     } < 0
     {
-        return 0;
+        // fwd to stream_verdict which will discard this non-linear packet
+        return ctx.len();
     }
 
     let data = SkbData::from_ctx(&ctx);
@@ -50,5 +51,10 @@ fn stream_parser(ctx: SkBuffContext) -> u32 {
         }
     }
 
-    0
+    // fwd to stream_verdict if \r\n\r\n is not found within scratch size
+    if ctx.len() >= HTTP_REQ_MAX_SCRATCH_SIZE as u32 {
+        return ctx.len(); 
+    }
+
+    0 // wait for more data
 }
