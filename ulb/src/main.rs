@@ -1,8 +1,9 @@
 #![cfg(target_os = "linux")]
 
 use std::{
-    os::fd::AsRawFd,
-    time::Duration,
+    net::SocketAddr,
+    num::NonZero,
+    thread::available_parallelism,
 };
 
 use anyhow::anyhow;
@@ -19,24 +20,29 @@ use aya::{
         SockOps,
     },
 };
+use clap::Parser;
 use log::{
     Level,
-    error,
     info,
     log_enabled,
+    warn,
 };
 use tokio::{
     io::AsyncReadExt,
-    net::TcpListener,
+    net::{
+        TcpListener,
+        TcpSocket,
+    },
     signal,
     task::JoinSet,
-    time::timeout,
 };
+use tokio_util::sync::CancellationToken;
 use ulb_common::{
     JMP_PROG_ROUTING,
     SocketCookie,
     ir::{
         BackendCluster,
+        LISTEN_BACKLOG_QUEUE_SIZE,
         RouteValue,
         VHostKey,
         VHostValue,
@@ -44,10 +50,7 @@ use ulb_common::{
 };
 
 use crate::{
-    backend::{
-        BackendManager,
-        get_socket_cookie,
-    },
+    backend::BackendManager,
     config::{
         adapters::{
             load_config,
@@ -60,8 +63,31 @@ use crate::{
 mod backend;
 mod config;
 
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value = "./config.yaml")] // TODO: change default path
+    config: String,
+}
+
+fn bind_port(addr: SocketAddr) -> anyhow::Result<TcpListener> {
+    let socket = if addr.is_ipv4() {
+        TcpSocket::new_v4()?
+    } else {
+        TcpSocket::new_v6()?
+    };
+
+    socket
+        .set_reuseport(true)
+        .map_err(|err| anyhow!("failed to set `reuseport` opt: {err}"))?;
+
+    socket.bind(addr)?;
+    Ok(socket.listen(LISTEN_BACKLOG_QUEUE_SIZE)?)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
     env_logger::init();
 
     if !log_enabled!(Level::Info) {
@@ -151,7 +177,24 @@ async fn main() -> anyhow::Result<()> {
     sock_ops.attach(cgroup, CgroupAttachMode::Single)?;
 
     // configuration
-    let cfg = load_config::<NativeAdapter, _>("./__ulb_config.yaml")?; // TODO:
+    let cfg = load_config::<NativeAdapter, _>(&args.config)?;
+
+    let mut listener_ports: Array<_, u8> = Array::try_from(
+        ebpf.take_map("LISTENER_PORTS")
+            .ok_or_else(|| anyhow!("missing `LISTENER_PORTS`"))?,
+    )?;
+
+    for listener_cfg in &cfg.listeners {
+        let addr: SocketAddr = listener_cfg
+            .addr
+            .parse()
+            .map_err(|err| anyhow!("invalid listener address `{}`: {err}", listener_cfg.addr))?;
+
+        listener_ports.set(addr.port() as u32, 1, 0)?;
+    }
+
+    let shutdown_token = CancellationToken::new();
+
     let mut backend_manager = BackendManager::new();
     let cookie_map = backend_manager
         .initialize_clusters(&cfg, &mut backend_map)
@@ -187,72 +230,72 @@ async fn main() -> anyhow::Result<()> {
 
     info!("config loaded");
 
-    let listener = TcpListener::bind("0.0.0.0:8082").await?;
-    info!("listening on http://localhost:8082");
+    // TODO: change default value
+    let num_cores = available_parallelism().map(NonZero::get).unwrap_or(4);
+    let mut tasks = JoinSet::new();
 
-    let mut clients = JoinSet::new();
+    info!("starting {} workers per listener", num_cores);
 
-    loop {
-        tokio::select! {
-            res = listener.accept() => {
-                let (mut stream, peer_addr) = match res {
-                    Ok(x) => x,
-                    Err(err) => {
-                        error!("failed to accept client: {err}");
-                        continue;
-                    }
-                };
+    for listener_cfg in &cfg.listeners {
+        // TODO: addr parsing step is done twice, move parsing to compiler
+        if let Ok(addr) = listener_cfg.addr.parse::<SocketAddr>() {
+            for _ in 0..num_cores {
+                let listener = bind_port(addr)?;
+                let shutdown_token = shutdown_token.clone();
 
-                info!("accepted client: {peer_addr}");
-
-                if let Err(err) = stream.set_nodelay(true) {
-                    error!("failed to set nodelay: {err}");
-                    continue;
-                }
-
-                let fd = stream.as_raw_fd();
-                let cookie = match get_socket_cookie(fd) {
-                    Ok(x) => x,
-                    Err(err) => {
-                        error!("failed to get client socket cookie: {err}");
-                        continue;
-                    }
-                };
-
-                if let Err(err) = connection_map.insert(cookie, fd, 0) {
-                    error!("failed to insert client into CONNECTION_MAP: {err}");
-                    continue;
-                }
-
-                clients.spawn(async move {
-                    let mut buf = [0u8; 1];
+                tasks.spawn(async move {
                     loop {
-                        if let Ok(0) | Err(_) = stream.read(&mut buf).await {
-                            break;
+                        tokio::select! {
+                            Ok((mut stream, _)) = listener.accept() => {
+                                let _ = stream.set_nodelay(true);
+                                let task_shutdown = shutdown_token.clone();
+
+                                // EOF detection task
+                                tokio::spawn(async move {
+                                    let mut buf = [0u8; 1];
+
+                                    loop {
+                                        tokio::select! {
+                                            _ = task_shutdown.cancelled() => {
+                                                break;
+                                            }
+
+                                            res = stream.read(&mut buf) => {
+                                                if let Ok(0) | Err(_) = res {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+
+                            _ = shutdown_token.cancelled() => {
+                                break;
+                            }
                         }
                     }
                 });
             }
 
-            Some(event) = backend_manager.next_reconnect_event() => {
-                backend_manager.handle_reconnect(event, &mut backend_map, &mut cluster_table).await;
-            }
+            info!("listening on http://{addr}");
+        }
+    }
 
-            Some(res) = clients.join_next(), if !clients.is_empty() => {
-                if let Err(err) = res {
-                    error!("client failed: {err}");
-                }
+    loop {
+        tokio::select! {
+            // backend reconnect events
+            Some(event) = backend_manager.next_event() => {
+                backend_manager.handle_event(event, &mut cluster_table, &mut backend_map).await;
             }
 
             _ = signal::ctrl_c() => {
-                info!("received SIGINT");
-                backend_manager.shutdown();
+                info!("[SIGINT] shutting down...");
 
-                if !clients.is_empty() {
-                    let _ = timeout(Duration::from_secs(5), async {
-                        while clients.join_next().await.is_some() {}
-                    }).await;
-                }
+                shutdown_token.cancel();
+                backend_manager.shutdown().await;
+
+                while tasks.join_next().await.is_some() {}
 
                 break;
             }
