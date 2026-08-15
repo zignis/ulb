@@ -9,16 +9,17 @@ use aya_ebpf::{
 };
 use ulb_common::{
     SESSION_ENTRY_BACKEND,
-    SESSION_ENTRY_CLIENT,
     SocketCookie,
     ir::RouteAction,
 };
 
 use crate::{
-    BACKEND_MAP,
-    SESSION_MAP,
     debug,
-    http::get_http_buf,
+    maps::{
+        BACKEND_CONNECTION_MAP,
+        SESSION_MAP,
+    },
+    utils::get_http_buf,
 };
 
 mod cluster;
@@ -48,27 +49,22 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
         RouteAction::Forward { cluster_idx } => {
             debug!(&ctx, "routing to cluster {}", cluster_idx);
 
-            let mut backend_cookie = cluster::select_backend(cluster_idx)?;
             let client_cookie =
                 unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) } as SocketCookie;
+
+            let mut backend_cookie = cluster::select_backend(ctx, cluster_idx, client_cookie)?;
 
             #[allow(unused_variables)]
             if let Err(eno) =
                 SESSION_MAP.insert(&client_cookie, &[backend_cookie, SESSION_ENTRY_BACKEND], 0)
             {
                 debug!(&ctx, "failed to insert client->backend session ({})", eno);
+                let _ = SESSION_MAP.remove(&backend_cookie); // remove mapping inserted by cluster::select_backend
                 return Err(());
             }
 
-            #[allow(unused_variables)]
-            if let Err(eno) =
-                SESSION_MAP.insert(&backend_cookie, &[client_cookie, SESSION_ENTRY_CLIENT], 0)
+            if BACKEND_CONNECTION_MAP.redirect_skb(ctx, &mut backend_cookie, 0) == (SK_PASS as i64)
             {
-                debug!(&ctx, "failed to insert backend->client session ({})", eno);
-                return Err(());
-            }
-
-            if BACKEND_MAP.redirect_skb(ctx, &mut backend_cookie, 0) == (SK_PASS as i64) {
                 return Ok(SK_PASS);
             }
 
