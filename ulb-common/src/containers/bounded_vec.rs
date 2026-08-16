@@ -35,6 +35,37 @@ where
     }
 }
 
+impl<T, const MAX_SIZE: usize> BoundedVec<T, MAX_SIZE>
+where
+    T: Copy + Clone + Default,
+{
+    #[cfg(feature = "user")]
+    pub fn push(&mut self, element: T) -> Result<(), ()> {
+        if self.len as usize >= MAX_SIZE {
+            return Err(());
+        }
+
+        self.data[self.len as usize] = element;
+        self.len += 1;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "user")]
+    pub fn remove(&mut self, idx: usize) -> Option<T> {
+        if idx >= self.len as usize {
+            return None;
+        }
+
+        let prev = self.data[idx];
+
+        self.len -= 1;
+        self.data[idx] = self.data[self.len as usize];
+
+        Some(prev)
+    }
+}
+
 #[cfg(feature = "user")]
 impl<T, const MAX_SIZE: usize> TryFrom<Vec<T>> for BoundedVec<T, MAX_SIZE>
 where
@@ -56,6 +87,19 @@ where
             len: len as u32,
             data,
         })
+    }
+}
+
+#[cfg(feature = "user")]
+impl<T, const MAX_SIZE: usize> Default for BoundedVec<T, MAX_SIZE>
+where
+    T: Copy + Clone + Default,
+{
+    fn default() -> Self {
+        Self {
+            len: 0,
+            data: [T::default(); MAX_SIZE],
+        }
     }
 }
 
