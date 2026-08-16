@@ -66,7 +66,7 @@ impl SkbData {
     // u8
 
     #[inline(always)]
-    pub fn match_u8_unchecked(&self, offset: usize, value: u8) -> bool {
+    pub unsafe fn match_u8_unchecked(&self, offset: usize, value: u8) -> bool {
         let bytes = unsafe { self.slice_unchecked::<{ size_of::<u8>() }>(offset) };
         u8::from_ne_bytes(*bytes) == value
     }
@@ -77,7 +77,7 @@ impl SkbData {
             return false;
         }
 
-        self.match_u8_unchecked(offset, value)
+        unsafe { self.match_u8_unchecked(offset, value) }
     }
 
     // TODO: remove once used somewhere
@@ -95,7 +95,7 @@ impl SkbData {
     // u16
 
     #[inline(always)]
-    pub fn match_u16_unchecked(&self, offset: usize, value: u16) -> bool {
+    pub unsafe fn match_u16_unchecked(&self, offset: usize, value: u16) -> bool {
         let bytes = unsafe { self.slice_unchecked::<{ size_of::<u16>() }>(offset) };
         u16::from_ne_bytes(*bytes) == value
     }
@@ -106,7 +106,7 @@ impl SkbData {
             return false;
         }
 
-        self.match_u16_unchecked(offset, value)
+        unsafe { self.match_u16_unchecked(offset, value) }
     }
 
     // TODO: remove once used somewhere
@@ -124,7 +124,7 @@ impl SkbData {
     // u32
 
     #[inline(always)]
-    pub fn match_u32_unchecked(&self, offset: usize, value: u32) -> bool {
+    pub unsafe fn match_u32_unchecked(&self, offset: usize, value: u32) -> bool {
         let bytes = unsafe { self.slice_unchecked::<{ size_of::<u32>() }>(offset) };
         u32::from_ne_bytes(*bytes) == value
     }
@@ -135,7 +135,7 @@ impl SkbData {
             return false;
         }
 
-        self.match_u32_unchecked(offset, value)
+        unsafe { self.match_u32_unchecked(offset, value) }
     }
 
     #[inline(always)]
