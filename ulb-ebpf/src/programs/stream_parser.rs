@@ -46,7 +46,7 @@ fn stream_parser(ctx: SkBuffContext) -> u32 {
             break;
         }
 
-        if data.match_u32_unchecked(i, CRLF_CRLF) {
+        if unsafe { data.match_u32_unchecked(i, CRLF_CRLF) } {
             return ctx.len();
         }
     }
