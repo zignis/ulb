@@ -39,9 +39,9 @@ pub fn compile_vhosts(
             );
         }
 
-        for vhost_cfg in &listener.hosts {
+        for vhost in &listener.hosts {
             let route_start = route_table.len() as u32;
-            let route_count = vhost_cfg.routes.len() as u32;
+            let route_count = vhost.routes.len() as u32;
 
             if route_count > MAX_ROUTES_PER_VHOST {
                 bail!("exceeded maximum routes per vhost ({route_count}/{MAX_ROUTES_PER_VHOST})");
@@ -56,11 +56,12 @@ pub fn compile_vhosts(
 
             vhost_map.insert(
                 VHostKey {
-                    host: BoundedStr::try_from(vhost_cfg.host.as_str()).map_err(|_| {
+                    port: port as u32,
+                    host: BoundedStr::try_from(vhost.host.as_str()).map_err(|_| {
                         anyhow!(
                             "host `{}` is too long ({}/{HTTP_HDR_VAL_MAX_LEN})",
-                            vhost_cfg.host,
-                            vhost_cfg.host.len()
+                            vhost.host,
+                            vhost.host.len()
                         )
                     })?,
                 },
@@ -70,7 +71,7 @@ pub fn compile_vhosts(
                 },
             );
 
-            for route_cfg in &vhost_cfg.routes {
+            for route_cfg in &vhost.routes {
                 let mut route = RouteValue {
                     path: BoundedStr::try_from(route_cfg.path.as_str()).map_err(|_| {
                         anyhow!(

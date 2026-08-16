@@ -7,6 +7,7 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "user", derive(PartialEq, Eq, Hash))]
 pub struct VHostKey {
+    pub port: u32, // listener port (needs to be u32 to avoid explicit padding)
     pub host: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
 }
 

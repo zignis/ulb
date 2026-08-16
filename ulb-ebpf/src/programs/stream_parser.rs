@@ -17,6 +17,9 @@ use crate::{
     },
 };
 
+// TODO: split into separate programs for client-facing and backend-facing
+// sockets
+
 const CRLF_CRLF: u32 = b32(b"\r\n\r\n"); // signifies end of headers
 
 #[stream_parser]
@@ -53,7 +56,7 @@ fn stream_parser(ctx: SkBuffContext) -> u32 {
 
     // fwd to stream_verdict if \r\n\r\n is not found within scratch size
     if ctx.len() >= HTTP_REQ_MAX_SCRATCH_SIZE as u32 {
-        return ctx.len(); 
+        return ctx.len();
     }
 
     0 // wait for more data
