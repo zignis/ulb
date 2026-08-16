@@ -61,14 +61,16 @@ fn sock_ops(ctx: SockOpsContext) -> u32 {
                     debug!(&ctx, "bpf_sock_ops_cb_flags_set failed");
                 }
 
-                if unsafe {
+                let ret_val = unsafe {
                     bpf_sock_hash_update(
                         ctx.ops,
                         &CLIENT_CONNECTION_MAP as *const _ as *mut c_void,
                         &cookie as *const _ as *mut c_void,
                         0,
-                    ) == 0
-                } {
+                    )
+                };
+
+                if ret_val == 0 {
                     debug!(
                         &ctx,
                         "inserted {} to CLIENT_CONNECTION_MAP (listener :{})", cookie, local_port
@@ -76,9 +78,10 @@ fn sock_ops(ctx: SockOpsContext) -> u32 {
                 } else {
                     debug!(
                         &ctx,
-                        "failed to insert {} to CLIENT_CONNECTION_MAP (listener :{})",
+                        "failed to insert {} to CLIENT_CONNECTION_MAP (listener :{}): {}",
                         cookie,
-                        local_port
+                        local_port,
+                        ret_val
                     );
                 }
             }
