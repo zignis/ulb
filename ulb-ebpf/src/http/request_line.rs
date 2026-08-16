@@ -24,11 +24,6 @@ use crate::{
     },
 };
 
-const HTTP_VERSION_MIN_LEN: usize = 10; // HTTP/1.1\r\n
-const HTTP_VERSION_PREFIX_LEN: usize = 7; // HTTP/1.
-
-// methods
-
 const GET_SP: u32 = b32(b"GET ");
 const PUT_SP: u32 = b32(b"PUT ");
 const POST: u32 = b32(b"POST");
@@ -75,6 +70,8 @@ fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
     }
 }
 
+//
+
 #[inline(never)]
 fn parse_uri_len(data: SkbData, uri_start: usize) -> Result<usize, HttpParseError> {
     for i in 0..HTTP_URI_MAX_LEN {
@@ -94,29 +91,40 @@ fn parse_uri_len(data: SkbData, uri_start: usize) -> Result<usize, HttpParseErro
     Err(HttpParseError::InvalidUri)
 }
 
+//
+
+const HTTP_VERSION_CRLF: usize = 10; // HTTP/0.0\r\n
+const HTTP: u32 = b32(b"HTTP");
+const V1P0: u32 = b32(b"/1.0");
+const V1P1: u32 = b32(b"/1.1");
+
 fn parse_version(
     data: SkbData,
     version_start: usize,
 ) -> Result<(HttpVersion, usize), HttpParseError> {
-    if data.is_length_out_of_bounds(version_start + HTTP_VERSION_MIN_LEN) {
+    if data.is_length_out_of_bounds(version_start + HTTP_VERSION_CRLF) {
         return Err(HttpParseError::InvalidVersion);
     }
 
-    if unsafe { data.slice_unchecked(version_start) } != b"HTTP/1." {
+    if unsafe { !data.match_u32_unchecked(version_start, HTTP) } {
         return Err(HttpParseError::InvalidVersion);
     }
 
-    let version = match unsafe { data.at_unchecked(version_start + HTTP_VERSION_PREFIX_LEN) } {
-        b'0' => HttpVersion::V1P0,
-        b'1' => HttpVersion::V1P1,
-        _ => return Err(HttpParseError::InvalidVersion),
+    let version_offset = version_start + size_of::<u32>();
+
+    let version = if unsafe { data.match_u32_unchecked(version_offset, V1P0) } {
+        HttpVersion::V1P0
+    } else if unsafe { data.match_u32_unchecked(version_offset, V1P1) } {
+        HttpVersion::V1P1
+    } else {
+        return Err(HttpParseError::InvalidVersion);
     };
 
-    let line_end = version_start + HTTP_VERSION_PREFIX_LEN + 1;
+    let line_end = version_start + size_of::<u32>() + size_of::<u32>();
 
     match unsafe { data.at_unchecked(line_end) } {
-        CH_CR => Ok((version, line_end + 2)), // standard crlf eol
-        CH_LF => Ok((version, line_end + 1)), // eol with only lf
+        CH_CR => Ok((version, line_end + 2)), // HTTP/0.0\r\n (standard)
+        CH_LF => Ok((version, line_end + 1)), // HTTP/0.0\n
         _ => Err(HttpParseError::InvalidVersion),
     }
 }
