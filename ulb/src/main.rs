@@ -61,6 +61,7 @@ use crate::{
 
 mod backend;
 mod config;
+mod utils;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
