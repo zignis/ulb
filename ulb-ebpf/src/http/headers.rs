@@ -31,6 +31,9 @@ use crate::{
     utils::SkbData,
 };
 
+const BPF_LOOP_NEXT: c_long = 0;
+const BPF_LOOP_STOP: c_long = 1;
+
 struct LoopContext<'a> {
     ctx: &'a SkBuffContext,
     req: &'a mut HttpRequest,
@@ -79,7 +82,7 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
         Ok(consumed) => {
             if consumed == 0 {
                 // end of headers
-                return 1;
+                return BPF_LOOP_STOP;
             }
 
             // TODO: impl case-insensitive matching for host header
@@ -91,13 +94,13 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
             loop_ctx.req._offset += consumed;
             loop_ctx.req.headers.len += 1;
 
-            0
+            BPF_LOOP_NEXT
         }
 
         Err(err) => {
             loop_ctx.error = Some(err);
 
-            1
+            BPF_LOOP_STOP
         }
     }
 }
