@@ -40,7 +40,8 @@ use ulb_common::{
     JMP_PROG_ROUTING,
     SocketCookie,
     ir::{
-        BackendCluster,
+        BackendConnectionPool,
+        Cluster,
         LISTEN_BACKLOG_QUEUE_SIZE,
         RouteValue,
         VHostKey,
@@ -185,12 +186,7 @@ async fn main() -> anyhow::Result<()> {
     )?;
 
     for listener_cfg in &cfg.listeners {
-        let addr: SocketAddr = listener_cfg
-            .addr
-            .parse()
-            .map_err(|err| anyhow!("invalid listener address `{}`: {err}", listener_cfg.addr))?;
-
-        listener_ports.set(addr.port() as u32, 1, 0)?;
+        listener_ports.set(listener_cfg.addr.port() as u32, 1, 0)?;
     }
 
     let shutdown_token = CancellationToken::new();
