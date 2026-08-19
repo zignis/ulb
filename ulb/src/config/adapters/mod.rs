@@ -45,7 +45,7 @@ where
 fn validate_config(cfg: UlbConfig) -> anyhow::Result<UlbConfig> {
     // listeners
 
-    if cfg.listeners.len() >= MAX_LISTENERS as usize {
+    if cfg.listeners.len() >= MAX_LISTENERS {
         bail!(
             "exceeded maximum listeners ({}/{MAX_LISTENERS})",
             cfg.listeners.len()

@@ -25,6 +25,7 @@ impl<T, const MAX_SIZE: usize> BoundedVec<T, MAX_SIZE>
 where
     T: Copy + Clone + Default,
 {
+    #[allow(clippy::result_unit_err)]
     #[cfg(feature = "user")]
     pub fn push(&mut self, element: T) -> Result<(), ()> {
         if self.len as usize >= MAX_SIZE {

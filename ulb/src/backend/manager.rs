@@ -136,7 +136,7 @@ impl BackendManager {
                                 backend_map,
                             ) {
                                 Ok(cookie) => {
-                                    if let Err(_) = pool.connections.push(cookie) {
+                                    if pool.connections.push(cookie).is_err() {
                                         // this should never fail; pool limits are
                                         // validated during config compilation
                                         error!("infallible");
@@ -276,7 +276,7 @@ impl BackendManager {
 
                 // TODO: improve error handling
                 if let Ok(mut pool) = backend_conn_pool_table.get(&pool_idx, 0) {
-                    if let Err(_) = pool.connections.push(new_cookie) {
+                    if pool.connections.push(new_cookie).is_err() {
                         error!("BACKEND_CONNECTION_POOL_TABLE overflow"); // TODO: should never happen
                         return;
                     }
