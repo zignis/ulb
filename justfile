@@ -2,7 +2,7 @@ run:
     cargo run --release
 
 run_debug:
-    cargo run --release --features=debug
+    RUST_LOG=info cargo run --release --features=debug
 
 build:
     cargo build --release
