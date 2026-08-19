@@ -1,8 +1,14 @@
 #[cfg(feature = "user")]
 use alloc::vec::Vec;
-use core::ops::{
-    Deref,
-    DerefMut,
+use core::{
+    ops::{
+        Deref,
+        DerefMut,
+    },
+    slice::{
+        Iter,
+        IterMut,
+    },
 };
 
 #[repr(C)]
@@ -13,26 +19,6 @@ where
 {
     pub len: u32,
     pub data: [T; MAX_SIZE],
-}
-
-impl<T, const MAX_SIZE: usize> Deref for BoundedVec<T, MAX_SIZE>
-where
-    T: Copy + Clone + Default,
-{
-    type Target = [T; MAX_SIZE];
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
-
-impl<T, const MAX_SIZE: usize> DerefMut for BoundedVec<T, MAX_SIZE>
-where
-    T: Copy + Clone + Default,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data
-    }
 }
 
 impl<T, const MAX_SIZE: usize> BoundedVec<T, MAX_SIZE>
@@ -63,6 +49,50 @@ where
         self.data[idx] = self.data[self.len as usize];
 
         Some(prev)
+    }
+}
+
+impl<T, const MAX_SIZE: usize> Deref for BoundedVec<T, MAX_SIZE>
+where
+    T: Copy + Clone + Default,
+{
+    type Target = [T; MAX_SIZE];
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T, const MAX_SIZE: usize> DerefMut for BoundedVec<T, MAX_SIZE>
+where
+    T: Copy + Clone + Default,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+impl<'a, T, const MAX_SIZE: usize> IntoIterator for &'a BoundedVec<T, MAX_SIZE>
+where
+    T: Copy + Clone + Default,
+{
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.data[..self.len as usize].iter()
+    }
+}
+
+impl<'a, T, const MAX_SIZE: usize> IntoIterator for &'a mut BoundedVec<T, MAX_SIZE>
+where
+    T: Copy + Clone + Default,
+{
+    type Item = &'a mut T;
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.data[..self.len as usize].iter_mut()
     }
 }
 
