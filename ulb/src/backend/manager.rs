@@ -35,15 +35,15 @@ use tokio::{
 };
 use ulb_common::{
     SocketCookie,
-    ir::{
-        BackendCluster,
-        MAX_BACKENDS_PER_CLUSTER,
-    },
+    ir::BackendConnectionPool,
 };
 
 use crate::{
-    backend::socket_cookie::get_socket_cookie,
-    config::canonical::UlbConfig,
+    config::canonical::{
+        ClusterConnectionPoolMap,
+        UlbConfig,
+    },
+    utils::get_socket_cookie,
 };
 
 // TODO: move this to config
@@ -53,13 +53,14 @@ const MAX_RETRY_DURATION: u64 = 30; // seconds
 pub enum ManagerEvent {
     Disconnect {
         cluster_idx: u32,
+        pool_idx: u32,
         addr: SocketAddr,
         old_cookie: SocketCookie,
     },
     Reconnected {
         cluster_idx: u32,
+        pool_idx: u32,
         addr: SocketAddr,
-        old_cookie: SocketCookie,
         new_cookie: SocketCookie,
         stream: TcpStream,
     },
@@ -69,6 +70,7 @@ pub struct BackendManager {
     tasks: JoinSet<()>,
     event_tx: UnboundedSender<ManagerEvent>,
     event_rx: UnboundedReceiver<ManagerEvent>,
+    next_pool_idx: u32,
 }
 
 impl BackendManager {
@@ -78,6 +80,7 @@ impl BackendManager {
             event_tx,
             event_rx,
             tasks: JoinSet::new(),
+            next_pool_idx: 0,
         }
     }
 
@@ -96,20 +99,27 @@ impl BackendManager {
         &mut self,
         cfg: &UlbConfig,
         backend_map: &mut SockHash<MapData, SocketCookie>,
-    ) -> Result<HashMap<String, Vec<SocketCookie>>> {
+        backend_conn_pool_table: &mut Array<MapData, BackendConnectionPool>,
+    ) -> Result<ClusterConnectionPoolMap> {
         let mut cookie_map = HashMap::new();
 
         for (idx, cluster_cfg) in cfg.clusters.iter().enumerate() {
-            let mut cookies = Vec::new();
-            // TODO: temporary wrong default value for pool_size
-            let pool_size = cluster_cfg.pool_size.unwrap_or(MAX_BACKENDS_PER_CLUSTER);
+            let mut conn_pools = Vec::new();
 
-            for endpoint in &cluster_cfg.endpoints {
-                let addr: SocketAddr = endpoint.addr.parse()?;
+            for backend in &cluster_cfg.backends {
+                let addr = backend.addr;
                 let mut join_set = JoinSet::new();
 
-                // TODO: separate map for pool of individual backend?
-                for _ in 0..pool_size {
+                let pool_idx = self.next_pool_idx;
+                self.next_pool_idx += 1;
+                conn_pools.push(pool_idx);
+
+                let mut pool = BackendConnectionPool {
+                    connections: Default::default(),
+                    rr_counter: 0,
+                };
+
+                for _ in 0..backend.pool_size {
                     join_set.spawn(async move { TcpStream::connect(&addr).await });
                 }
 
@@ -121,10 +131,18 @@ impl BackendManager {
                                 &mut self.tasks,
                                 stream,
                                 idx as u32,
+                                pool_idx,
                                 addr,
                                 backend_map,
                             ) {
-                                Ok(cookie) => cookies.push(cookie),
+                                Ok(cookie) => {
+                                    if let Err(_) = pool.connections.push(cookie) {
+                                        // this should never fail; pool limits are
+                                        // validated during config compilation
+                                        error!("infallible");
+                                    }
+                                }
+
                                 Err(err) => error!("failed to register backend: {err}"),
                             }
                         }
@@ -139,12 +157,19 @@ impl BackendManager {
                     }
                 }
 
-                if !cookies.is_empty() {
-                    info!("setup {} connections to backend: {addr}", cookies.len());
+                if pool.connections.len > 0 {
+                    info!(
+                        "setup {} connections to backend: {addr}",
+                        pool.connections.len
+                    );
+                }
+
+                if let Err(err) = backend_conn_pool_table.set(pool_idx, pool, 0) {
+                    error!("failed to insert into BACKEND_CONNECTION_POOL_TABLE: {err}");
                 }
             }
 
-            cookie_map.insert(cluster_cfg.name.clone(), cookies);
+            cookie_map.insert(cluster_cfg.name.clone(), conn_pools);
         }
 
         Ok(cookie_map)
@@ -153,16 +178,34 @@ impl BackendManager {
     pub async fn handle_event(
         &mut self,
         event: ManagerEvent,
-        cluster_table: &mut Array<MapData, BackendCluster>,
         backend_map: &mut SockHash<MapData, SocketCookie>,
+        backend_conn_pool_table: &mut Array<MapData, BackendConnectionPool>,
     ) {
         match event {
             ManagerEvent::Disconnect {
                 cluster_idx,
+                pool_idx,
                 addr,
                 old_cookie,
             } => {
                 let tx = self.event_tx.clone();
+
+                // TODO: improve error handling; the pool should exist here
+                if let Ok(mut pool) = backend_conn_pool_table.get(&pool_idx, 0) {
+                    // TODO: make this remove by value method internal to BoundedVec
+                    if let Some(idx) = pool
+                        .connections
+                        .iter()
+                        .position(|&cookie| cookie == old_cookie)
+                    {
+                        pool.connections.remove(idx);
+
+                        if let Err(err) = backend_conn_pool_table.set(pool_idx, pool, 0) {
+                            error!("failed to shrink connection pool: {err}");
+                            return; // TODO: should not reconnect if pool can't be shrinked
+                        }
+                    }
+                }
 
                 self.tasks.spawn(async move {
                     let backoff = ExponentialBackoff {
@@ -190,8 +233,8 @@ impl BackendManager {
 
                                 let _ = tx.send(ManagerEvent::Reconnected {
                                     cluster_idx,
+                                    pool_idx,
                                     addr,
-                                    old_cookie,
                                     new_cookie: cookie,
                                     stream,
                                 });
@@ -207,8 +250,8 @@ impl BackendManager {
 
             ManagerEvent::Reconnected {
                 cluster_idx,
+                pool_idx,
                 addr,
-                old_cookie,
                 new_cookie,
                 stream,
             } => {
@@ -226,22 +269,20 @@ impl BackendManager {
                     &mut self.tasks,
                     stream,
                     cluster_idx,
+                    pool_idx,
                     addr,
                     new_cookie,
                 );
 
-                // update new cookie in cluster table
-                if let Ok(mut cluster) = cluster_table.get(&cluster_idx, 0) {
-                    for endpoint in cluster.endpoints.iter_mut() {
-                        if endpoint.cookie == old_cookie {
-                            endpoint.cookie = new_cookie;
+                // TODO: improve error handling
+                if let Ok(mut pool) = backend_conn_pool_table.get(&pool_idx, 0) {
+                    if let Err(_) = pool.connections.push(new_cookie) {
+                        error!("BACKEND_CONNECTION_POOL_TABLE overflow"); // TODO: should never happen
+                        return;
+                    }
 
-                            if let Err(err) = cluster_table.set(cluster_idx, cluster, 0) {
-                                error!("failed to update CLUSTER_TABLE: {err}");
-                            }
-
-                            break;
-                        }
+                    if let Err(err) = backend_conn_pool_table.set(pool_idx, pool, 0) {
+                        error!("failed to update BACKEND_CONNECTION_POOL_TABLE: {err}");
                     }
                 }
             }
@@ -253,6 +294,7 @@ impl BackendManager {
         tasks: &mut JoinSet<()>,
         stream: TcpStream,
         cluster_idx: u32,
+        pool_idx: u32,
         addr: SocketAddr,
         backend_map: &mut SockHash<MapData, SocketCookie>,
     ) -> Result<SocketCookie> {
@@ -267,7 +309,15 @@ impl BackendManager {
             .set_nodelay(true)
             .map_err(|err| anyhow!("failed to set nodelay: {err}"))?;
 
-        Self::spawn_connection_monitor(tx_event, tasks, stream, cluster_idx, addr, cookie);
+        Self::spawn_connection_monitor(
+            tx_event,
+            tasks,
+            stream,
+            cluster_idx,
+            pool_idx,
+            addr,
+            cookie,
+        );
 
         Ok(cookie)
     }
@@ -277,6 +327,7 @@ impl BackendManager {
         tasks: &mut JoinSet<()>,
         mut stream: TcpStream,
         cluster_idx: u32,
+        pool_idx: u32,
         addr: SocketAddr,
         cookie: SocketCookie,
     ) {
@@ -288,16 +339,17 @@ impl BackendManager {
                     Ok(0) | Err(_) => {
                         info!("connection closed for {addr}");
 
-                        // TODO: add max reconnect attempt limit
+                        // TODO: add max reconnect attempt limit if it was an error response
+                        // ; maybe an error counter to stop reconnecting when it overflows
                         let _ = tx_event.send(ManagerEvent::Disconnect {
                             cluster_idx,
+                            pool_idx,
                             addr,
                             old_cookie: cookie,
                         });
 
                         break;
                     }
-
                     _ => {}
                 }
             }

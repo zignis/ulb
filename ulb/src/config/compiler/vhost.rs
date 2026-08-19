@@ -11,7 +11,6 @@ use ulb_common::{
     ir::{
         MAX_ROUTES,
         MAX_ROUTES_PER_VHOST,
-        MAX_VHOSTS,
         PATH_MAX_LEN,
         RouteValue,
         VHostKey,
@@ -20,24 +19,20 @@ use ulb_common::{
 };
 
 use crate::config::canonical::{
+    ClusterIdxMap,
     RouteAction,
     UlbConfig,
 };
 
 pub fn compile_vhosts(
     cfg: &UlbConfig,
-    cluster_idx_map: HashMap<String, u32>,
+    cluster_idx_map: ClusterIdxMap,
 ) -> anyhow::Result<(HashMap<VHostKey, VHostValue>, Vec<RouteValue>)> {
     let mut vhost_map = HashMap::new();
     let mut route_table = Vec::new();
 
     for listener in &cfg.listeners {
-        if listener.hosts.len() >= MAX_VHOSTS as usize {
-            bail!(
-                "exceeded maximum vhosts ({}/{MAX_VHOSTS})",
-                listener.hosts.len()
-            );
-        }
+        let port = listener.addr.port();
 
         for vhost in &listener.hosts {
             let route_start = route_table.len() as u32;

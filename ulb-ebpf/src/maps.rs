@@ -14,7 +14,9 @@ use ulb_common::{
     SessionEntry,
     SocketCookie,
     ir::{
-        BackendCluster,
+        BackendConnectionPool,
+        Cluster,
+        MAX_BACKEND_CONNECTION_POOLS,
         MAX_BACKEND_CONNECTIONS,
         MAX_CLIENT_CONNECTIONS,
         MAX_CLUSTERS,
@@ -58,7 +60,11 @@ pub static VHOST_MAP: HashMap<VHostKey, VHostValue> = HashMap::with_max_entries(
 pub static ROUTE_TABLE: Array<RouteValue> = Array::with_max_entries(MAX_ROUTES, 0);
 
 #[map]
-pub static CLUSTER_TABLE: Array<BackendCluster> = Array::with_max_entries(MAX_CLUSTERS, 0);
+pub static CLUSTER_TABLE: Array<Cluster> = Array::with_max_entries(MAX_CLUSTERS, 0);
+
+#[map]
+pub static BACKEND_CONNECTION_POOL_TABLE: Array<BackendConnectionPool> =
+    Array::with_max_entries(MAX_BACKEND_CONNECTION_POOLS, 0);
 
 //
 

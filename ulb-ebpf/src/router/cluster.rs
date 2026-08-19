@@ -5,16 +5,58 @@ use aya_ebpf::{
 use ulb_common::{
     SESSION_ENTRY_CLIENT,
     SocketCookie,
-    ir::MAX_BACKENDS_PER_CLUSTER,
 };
 
 use crate::{
     debug,
     maps::{
+        BACKEND_CONNECTION_POOL_TABLE,
         CLUSTER_TABLE,
         SESSION_MAP,
     },
 };
+
+const MAX_BACKEND_SELECT_ATTEMPTS: u32 = 8;
+const MAX_CONNECTION_SELECT_ATTEMPTS: u32 = 4;
+
+#[inline(always)]
+fn claim_connection(
+    ctx: &SkBuffContext,
+    pool_idx: u32,
+    client_cookie: SocketCookie,
+) -> Option<SocketCookie> {
+    let pool = BACKEND_CONNECTION_POOL_TABLE.get_ptr_mut(pool_idx)?;
+    let pool_len = unsafe { (*pool).connections.len };
+
+    if pool_len == 0 {
+        return None;
+    }
+
+    // TODO: make this atomic
+    let counter = unsafe { &mut (*pool).rr_counter };
+    let start_idx = *counter % pool_len;
+    *counter = counter.wrapping_add(1);
+
+    // search for idle connection in pool
+    for i in 0..MAX_CONNECTION_SELECT_ATTEMPTS {
+        let cookie_idx = (start_idx + i) % pool_len;
+        let cookie = unsafe { (*pool).connections.data.get(cookie_idx as usize)? };
+
+        if SESSION_MAP
+            .insert(
+                cookie,
+                &[client_cookie, SESSION_ENTRY_CLIENT],
+                BPF_NOEXIST as u64, // atomically claim the backend socket for this client
+            )
+            .is_ok()
+        {
+            debug!(ctx, "claimed backend {} from pool {}", *cookie, pool_idx);
+            return Some(*cookie);
+        }
+    }
+
+    None
+}
 
 pub fn select_backend(
     ctx: &SkBuffContext,
@@ -22,38 +64,25 @@ pub fn select_backend(
     client_cookie: SocketCookie,
 ) -> Result<SocketCookie, ()> {
     let cluster = CLUSTER_TABLE.get_ptr_mut(cluster_idx).ok_or(())?;
-    let len = unsafe { (*cluster).endpoints.len };
+    let len = unsafe { (*cluster).backends.len };
 
-    debug!(ctx, "cluster {} has {} endpoints", cluster_idx, len);
+    debug!(ctx, "cluster {} has {} backends", cluster_idx, len);
 
     if len == 0 {
         return Err(());
     }
 
-    // TODO: make this atomic since counter can be updated from multiple CPUs
+    // TODO: make this atomic
     let counter = unsafe { &mut (*cluster).rr_counter };
     let start_idx = *counter % len;
     *counter = counter.wrapping_add(1);
 
-    for i in 0..MAX_BACKENDS_PER_CLUSTER {
-        if i as u32 >= len {
-            break;
-        }
+    // search for idle backend
+    for i in 0..MAX_BACKEND_SELECT_ATTEMPTS {
+        let idx = (start_idx + i) % len;
 
-        let idx = (start_idx + i as u32) % len;
-
-        if let Some(endpoint) = unsafe { (*cluster).endpoints.data.get(idx as usize) } {
-            let cookie = endpoint.cookie;
-
-            if SESSION_MAP
-                .insert(
-                    &cookie,
-                    &[client_cookie, SESSION_ENTRY_CLIENT],
-                    BPF_NOEXIST as u64, // atomically claim the backend socket for this client
-                )
-                .is_ok()
-            {
-                debug!(ctx, "claimed backend {}", cookie);
+        if let Some(backend) = unsafe { (*cluster).backends.data.get(idx as usize) } {
+            if let Some(cookie) = claim_connection(ctx, backend.pool_idx, client_cookie) {
                 return Ok(cookie);
             }
         }

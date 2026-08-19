@@ -1,67 +1,44 @@
 use std::collections::HashMap;
 
-use anyhow::{
-    anyhow,
-    bail,
-};
-use ulb_common::{
-    SocketCookie,
-    ir::{
-        BackendCluster,
-        BackendEndpoint,
-        LoadBalancingPolicy,
-        MAX_BACKENDS_PER_CLUSTER,
-        MAX_CLUSTERS,
-    },
+use anyhow::anyhow;
+use ulb_common::ir::{
+    Backend,
+    Cluster,
+    LoadBalancingPolicy,
 };
 
-use crate::config::canonical::UlbConfig;
+use crate::config::canonical::{
+    ClusterConnectionPoolMap,
+    ClusterIdxMap,
+    UlbConfig,
+};
 
 pub fn compile_clusters(
     cfg: &UlbConfig,
-    cookie_map: HashMap<String, Vec<SocketCookie>>,
-) -> anyhow::Result<(Vec<BackendCluster>, HashMap<String, u32>)> {
+    cluster_conn_pool_map: ClusterConnectionPoolMap,
+) -> anyhow::Result<(Vec<Cluster>, ClusterIdxMap)> {
     let mut clusters = Vec::new();
     let mut cluster_idx_map = HashMap::new();
 
-    if cfg.clusters.len() > MAX_CLUSTERS as usize {
-        bail!(
-            "exceeded maximum clusters ({}/{MAX_CLUSTERS})",
-            cfg.clusters.len()
-        );
-    }
-
     for (idx, cluster_cfg) in cfg.clusters.iter().enumerate() {
-        if cluster_idx_map
-            .insert(cluster_cfg.name.clone(), idx as u32)
-            .is_some()
-        {
-            bail!("unexpected duplicate cluster name: `{}`", cluster_cfg.name);
-        }
+        cluster_idx_map.insert(cluster_cfg.name.clone(), idx as u32);
 
-        let cookies = cookie_map.get(&cluster_cfg.name).ok_or(anyhow!(
-            "missing cluster `{}` in `cookie_map`",
-            cluster_cfg.name
-        ))?;
-
-        if cookies.len() > MAX_BACKENDS_PER_CLUSTER {
-            bail!(
-                "exceeded maximum backends per cluster ({}/{MAX_BACKENDS_PER_CLUSTER})",
-                cookies.len()
-            );
-        }
-
-        let endpoints = cookies
+        let backends = cluster_conn_pool_map
+            .get(&cluster_cfg.name)
+            .ok_or(anyhow!(
+                "missing connection pool for cluster `{}`",
+                cluster_cfg.name
+            ))?
             .iter()
-            .map(|&cookie| BackendEndpoint {
-                cookie,
-                flags: 1, // TODO: future usage
+            .map(|&pool_idx| Backend {
+                pool_idx,
+                flags: 1, // TODO: reserved for future
             })
             .collect::<Vec<_>>();
 
-        clusters.push(BackendCluster {
-            policy: LoadBalancingPolicy::RoundRobin,
-            endpoints: endpoints.try_into().map_err(|_| anyhow!("infallible"))?,
+        clusters.push(Cluster {
+            policy: LoadBalancingPolicy::RoundRobin, // TODO: accept from user config
+            backends: backends.try_into().map_err(|_| anyhow!("infallible"))?,
             rr_counter: 0,
         });
     }

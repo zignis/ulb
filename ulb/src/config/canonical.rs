@@ -1,8 +1,25 @@
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+};
+
 use serde::{
     Deserialize,
     Serialize,
 };
-use ulb_common::ir::RouteMatchType;
+use ulb_common::ir::{
+    MAX_BACKEND_CONNECTION_POOL_SIZE,
+    RouteMatchType,
+};
+
+pub type BackendConnectionPoolIdx = u32;
+
+// <cluster name, list of indices into BACKEND_CONNECTION_POOL_TABLE for each
+// backend under this cluster>
+pub type ClusterConnectionPoolMap = HashMap<String, Vec<BackendConnectionPoolIdx>>;
+
+// <cluster name, idx in CLUSTER_TABLE>
+pub type ClusterIdxMap = HashMap<String, u32>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UlbConfig {
@@ -13,7 +30,7 @@ pub struct UlbConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListenerConfig {
     pub name: String,
-    pub addr: String,
+    pub addr: SocketAddr,
     pub hosts: Vec<VHostConfig>,
 }
 
@@ -40,11 +57,17 @@ pub struct RouteConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterConfig {
     pub name: String,
-    pub pool_size: Option<usize>,
-    pub endpoints: Vec<EndpointConfig>,
+    pub backends: Vec<BackendConfig>,
+}
+
+// https://github.com/serde-rs/serde/issues/368
+fn default_pool_size() -> usize {
+    MAX_BACKEND_CONNECTION_POOL_SIZE
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EndpointConfig {
-    pub addr: String,
+pub struct BackendConfig {
+    pub addr: SocketAddr,
+    #[serde(default = "default_pool_size")]
+    pub pool_size: usize,
 }

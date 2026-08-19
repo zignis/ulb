@@ -195,11 +195,16 @@ async fn main() -> anyhow::Result<()> {
 
     let shutdown_token = CancellationToken::new();
 
+    let mut backend_conn_pool_table: Array<_, BackendConnectionPool> = Array::try_from(
+        ebpf.take_map("BACKEND_CONNECTION_POOL_TABLE")
+            .ok_or_else(|| anyhow!("missing `BACKEND_CONNECTION_POOL_TABLE`"))?,
+    )?;
+
     let mut backend_manager = BackendManager::new();
-    let cookie_map = backend_manager
-        .initialize_clusters(&cfg, &mut backend_map)
+    let cluster_conn_pool_map = backend_manager
+        .initialize_clusters(&cfg, &mut backend_map, &mut backend_conn_pool_table)
         .await?;
-    let ir = compile(&cfg, cookie_map)?;
+    let ir = compile(&cfg, cluster_conn_pool_map)?;
 
     let mut vhost_map: HashMap<_, VHostKey, VHostValue> = HashMap::try_from(
         ebpf.take_map("VHOST_MAP")
@@ -219,7 +224,7 @@ async fn main() -> anyhow::Result<()> {
         route_table.set(i as u32, route, 0)?;
     }
 
-    let mut cluster_table: Array<_, BackendCluster> = Array::try_from(
+    let mut cluster_table: Array<_, Cluster> = Array::try_from(
         ebpf.take_map("CLUSTER_TABLE")
             .ok_or_else(|| anyhow!("missing `CLUSTER_TABLE`"))?,
     )?;
@@ -237,56 +242,56 @@ async fn main() -> anyhow::Result<()> {
     info!("starting {} workers per listener", num_cores);
 
     for listener_cfg in &cfg.listeners {
-        // TODO: addr parsing step is done twice, move parsing to compiler
-        if let Ok(addr) = listener_cfg.addr.parse::<SocketAddr>() {
-            for _ in 0..num_cores {
-                let listener = bind_port(addr)?;
-                let shutdown_token = shutdown_token.clone();
+        let addr = listener_cfg.addr;
 
-                tasks.spawn(async move {
-                    loop {
-                        tokio::select! {
-                            Ok((mut stream, _)) = listener.accept() => {
-                                let _ = stream.set_nodelay(true);
-                                let task_shutdown = shutdown_token.clone();
+        for _ in 0..num_cores {
+            let listener = bind_port(addr)?;
+            let shutdown_token = shutdown_token.clone();
 
-                                // EOF detection task
-                                tokio::spawn(async move {
-                                    let mut buf = [0u8; 1];
+            tasks.spawn(async move {
+                loop {
+                    tokio::select! {
+                        Ok((mut stream, _)) = listener.accept() => {
+                            let _ = stream.set_nodelay(true);
+                            let task_shutdown = shutdown_token.clone();
 
-                                    loop {
-                                        tokio::select! {
-                                            _ = task_shutdown.cancelled() => {
+
+                            // EOF detection task
+                            tokio::spawn(async move {
+                                let mut buf = [0u8; 1];
+
+                                loop {
+                                    tokio::select! {
+                                        _ = task_shutdown.cancelled() => {
+                                            break;
+                                        }
+
+                                        res = stream.read(&mut buf) => {
+                                            if let Ok(0) | Err(_) = res {
                                                 break;
-                                            }
-
-                                            res = stream.read(&mut buf) => {
-                                                if let Ok(0) | Err(_) = res {
-                                                    break;
-                                                }
                                             }
                                         }
                                     }
-                                });
-                            }
+                                }
+                            });
+                        }
 
-                            _ = shutdown_token.cancelled() => {
-                                break;
-                            }
+                        _ = shutdown_token.cancelled() => {
+                            break;
                         }
                     }
-                });
-            }
-
-            info!("listening on http://{addr}");
+                }
+            });
         }
+
+        info!("listening on http://{addr}");
     }
 
     loop {
         tokio::select! {
             // backend reconnect events
             Some(event) = backend_manager.next_event() => {
-                backend_manager.handle_event(event, &mut cluster_table, &mut backend_map).await;
+                backend_manager.handle_event(event, &mut backend_map, &mut backend_conn_pool_table).await;
             }
 
             _ = signal::ctrl_c() => {
