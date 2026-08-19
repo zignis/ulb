@@ -7,6 +7,7 @@ use aya_ebpf::{
     helpers::{
         bpf_loop,
         bpf_skb_load_bytes,
+        bpf_skb_store_bytes,
     },
     programs::SkBuffContext,
 };
@@ -89,6 +90,34 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
             if hdr.key.len == 4 && (&hdr.key[..4] == b"host" || &hdr.key[..4] == b"Host") {
                 // host bytes must be zeroed out for valid hashing
                 loop_ctx.req.host.clear_and_copy(hdr.value);
+            }
+
+            // TODO: temporary fix to ignore client's keepalive preference
+            if hdr.key.len == 10
+                && (&hdr.key[..10] == b"Connection" || &hdr.key[..10] == b"connection")
+            {
+                // TODO: no need to replace if hdr value is `keepalive`
+                let offset = loop_ctx.req._offset;
+                let filler = b"x-ulb-fill";
+
+                let status = unsafe {
+                    bpf_skb_store_bytes(
+                        loop_ctx.ctx.skb.skb as *mut _,
+                        offset,
+                        filler.as_ptr() as *const c_void,
+                        filler.len() as u32,
+                        0,
+                    )
+                };
+
+                // need to refresh pointers that were invalidated by bpf_skb_store_bytes
+                // https://docs.ebpf.io/linux/helper-function/bpf_skb_store_bytes
+                loop_ctx.data = SkbData::from_ctx(loop_ctx.ctx);
+
+                if status < 0 {
+                    loop_ctx.error = Some(HttpParseError::Internal);
+                    return BPF_LOOP_STOP;
+                }
             }
 
             loop_ctx.req._offset += consumed;
