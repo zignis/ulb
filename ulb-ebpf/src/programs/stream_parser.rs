@@ -17,9 +17,6 @@ use crate::{
     },
 };
 
-// TODO: split into separate programs for client-facing and backend-facing
-// sockets
-
 const CRLF_CRLF: u32 = b32(b"\r\n\r\n"); // signifies end of headers
 
 #[stream_parser]
@@ -27,7 +24,7 @@ fn stream_parser(ctx: SkBuffContext) -> u32 {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
 
     // fast-path
-    if unsafe { SESSION_MAP.get(&cookie) }.is_some() {
+    if unsafe { SESSION_MAP.get(cookie) }.is_some() {
         return ctx.len();
     }
 
@@ -38,6 +35,7 @@ fn stream_parser(ctx: SkBuffContext) -> u32 {
         )
     } < 0
     {
+        // TODO: should we return -ERRCODE and let the userspace drop conn?
         // fwd to stream_verdict which will discard this non-linear packet
         return ctx.len();
     }

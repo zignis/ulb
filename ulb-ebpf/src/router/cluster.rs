@@ -2,10 +2,7 @@ use aya_ebpf::{
     bindings::BPF_NOEXIST,
     programs::SkBuffContext,
 };
-use ulb_common::{
-    SESSION_ENTRY_CLIENT,
-    SocketCookie,
-};
+use ulb_common::SocketCookie;
 
 use crate::{
     debug,
@@ -40,12 +37,12 @@ fn claim_connection(
     // search for idle connection in pool
     for i in 0..MAX_CONNECTION_SELECT_ATTEMPTS {
         let cookie_idx = (start_idx + i) % pool_len;
-        let cookie = unsafe { (*pool).connections.data.get(cookie_idx as usize)? };
+        let cookie = unsafe { (*pool).connections.data.get(cookie_idx as usize) }?;
 
         if SESSION_MAP
             .insert(
                 cookie,
-                &[client_cookie, SESSION_ENTRY_CLIENT],
+                client_cookie,
                 BPF_NOEXIST as u64, // atomically claim the backend socket for this client
             )
             .is_ok()

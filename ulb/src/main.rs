@@ -138,15 +138,20 @@ async fn main() -> anyhow::Result<()> {
         .try_into()?;
     parser.load()?;
     parser.attach(connection_map.fd())?;
-    parser.attach(backend_map.fd())?;
 
-    let verdict: &mut SkSkb = ebpf
-        .program_mut("stream_verdict")
-        .ok_or_else(|| anyhow!("missing `stream_verdict` prog"))?
+    let client_verdict: &mut SkSkb = ebpf
+        .program_mut("client_stream_verdict")
+        .ok_or_else(|| anyhow!("missing `client_stream_verdict` prog"))?
         .try_into()?;
-    verdict.load()?;
-    verdict.attach(connection_map.fd())?;
-    verdict.attach(backend_map.fd())?;
+    client_verdict.load()?;
+    client_verdict.attach(connection_map.fd())?;
+
+    let backend_verdict: &mut SkSkb = ebpf
+        .program_mut("backend_stream_verdict")
+        .ok_or_else(|| anyhow!("missing `backend_stream_verdict` prog"))?
+        .try_into()?;
+    backend_verdict.load()?;
+    backend_verdict.attach(backend_map.fd())?;
 
     // jump table for tail calls
     let mut jmp_table: ProgramArray<_> = ProgramArray::try_from(

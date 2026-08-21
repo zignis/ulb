@@ -11,7 +11,6 @@ use aya_ebpf::{
 use ulb_common::{
     HttpRequest,
     JMP_PROG_COUNT,
-    SessionEntry,
     SocketCookie,
     ir::{
         BackendConnectionPool,
@@ -50,7 +49,7 @@ pub static CLIENT_CONNECTION_MAP: SockHash<SocketCookie> =
     SockHash::with_max_entries(MAX_CLIENT_CONNECTIONS, 0);
 
 #[map]
-pub static SESSION_MAP: HashMap<SocketCookie, SessionEntry> =
+pub static SESSION_MAP: HashMap<SocketCookie, SocketCookie> =
     HashMap::with_max_entries(MAX_SESSIONS, 0);
 
 #[map]

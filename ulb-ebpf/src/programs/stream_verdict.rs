@@ -1,8 +1,5 @@
 use aya_ebpf::{
-    bindings::sk_action::{
-        SK_DROP,
-        SK_PASS,
-    },
+    bindings::sk_action::SK_DROP,
     cty::c_void,
     helpers::{
         bpf_get_socket_cookie,
@@ -11,10 +8,7 @@ use aya_ebpf::{
     macros::stream_verdict,
     programs::SkBuffContext,
 };
-use ulb_common::{
-    JMP_PROG_ROUTING,
-    SESSION_ENTRY_CLIENT,
-};
+use ulb_common::JMP_PROG_ROUTING;
 
 use crate::{
     debug,
@@ -29,29 +23,22 @@ use crate::{
 };
 
 #[stream_verdict]
-fn stream_verdict(ctx: SkBuffContext) -> u32 {
-    if unsafe { bpf_skb_pull_data(ctx.skb.skb, 0) } < 0 {
-        return SK_DROP;
-    }
-
+fn client_stream_verdict(ctx: SkBuffContext) -> u32 {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
 
-    debug!(ctx, "connection arrived for verdict ({}B)", ctx.len());
+    debug!(
+        ctx,
+        "client connection arrived for verdict ({}B)",
+        ctx.len()
+    );
 
     // fast-path
-    if let Some([mut key, kind]) = unsafe { SESSION_MAP.get(&cookie) }.copied() {
-        if kind == SESSION_ENTRY_CLIENT {
-            if CLIENT_CONNECTION_MAP.redirect_skb(&ctx, &mut key, 0) == (SK_PASS as i64) {
-                return SK_PASS;
-            }
-        } else {
-            if BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut key, 0) == (SK_PASS as i64) {
-                return SK_PASS;
-            }
-        }
+    if let Some(mut backend) = unsafe { SESSION_MAP.get(cookie) }.copied() {
+        return BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut backend, 0) as u32;
+    }
 
-        // TODO: what should be done as a fallback?
-        // TODO: cleanup SESSION_MAP and return SK_DROP?
+    if unsafe { bpf_skb_pull_data(ctx.skb.skb, 0) } < 0 {
+        return SK_DROP;
     }
 
     if parse_req(&ctx).is_err() {
@@ -64,6 +51,24 @@ fn stream_verdict(ctx: SkBuffContext) -> u32 {
     }
 
     debug!(ctx, "tail call to router failed");
+
+    SK_DROP
+}
+
+#[stream_verdict]
+fn backend_stream_verdict(ctx: SkBuffContext) -> u32 {
+    let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
+
+    debug!(
+        ctx,
+        "backend connection arrived for verdict ({}B)",
+        ctx.len()
+    );
+
+    // fast-path
+    if let Some(mut client) = unsafe { SESSION_MAP.get(cookie) }.copied() {
+        return CLIENT_CONNECTION_MAP.redirect_skb(&ctx, &mut client, 0) as u32;
+    }
 
     SK_DROP
 }

@@ -8,7 +8,6 @@ use aya_ebpf::{
     programs::SkBuffContext,
 };
 use ulb_common::{
-    SESSION_ENTRY_BACKEND,
     SocketCookie,
     ir::RouteAction,
 };
@@ -56,11 +55,9 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
             let mut backend_cookie = cluster::select_backend(ctx, cluster_idx, client_cookie)?;
 
             #[allow(unused_variables)]
-            if let Err(eno) =
-                SESSION_MAP.insert(&client_cookie, &[backend_cookie, SESSION_ENTRY_BACKEND], 0)
-            {
+            if let Err(eno) = SESSION_MAP.insert(client_cookie, backend_cookie, 0) {
                 debug!(&ctx, "failed to insert client->backend session ({})", eno);
-                let _ = SESSION_MAP.remove(&backend_cookie); // remove mapping inserted by cluster::select_backend
+                let _ = SESSION_MAP.remove(backend_cookie); // remove mapping inserted by cluster::select_backend
                 return Err(());
             }
 

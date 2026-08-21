@@ -35,13 +35,13 @@ fn sock_ops(ctx: SockOpsContext) -> u32 {
         BPF_SOCK_OPS_STATE_CB if matches!(ctx.arg(1), BPF_TCP_CLOSE | BPF_TCP_TIME_WAIT) => {
             let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut c_void) } as SocketCookie;
 
-            if let Some(&[other_cookie, _entry_type]) = unsafe { SESSION_MAP.get(&cookie) } {
-                let _ = SESSION_MAP.remove(&cookie);
-                let _ = SESSION_MAP.remove(&other_cookie);
+            if let Some(other_cookie) = unsafe { SESSION_MAP.get(cookie) } {
+                let _ = SESSION_MAP.remove(cookie);
+                let _ = SESSION_MAP.remove(other_cookie);
 
                 debug!(
                     &ctx,
-                    "cleared session mapping [{}, {}]", cookie, other_cookie
+                    "cleared session mapping [{}, {}]", cookie, *other_cookie
                 );
             }
         }
