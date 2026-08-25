@@ -1,12 +1,18 @@
 #![no_std]
 #![no_main]
 
+use core::ffi::c_long;
+
 mod http;
 mod log;
 mod maps;
 mod programs;
 mod router;
 mod utils;
+
+// bpf_loop return values
+pub const BPF_LOOP_NEXT: c_long = 0;
+pub const BPF_LOOP_STOP: c_long = 1;
 
 #[cfg(not(test))]
 #[panic_handler]

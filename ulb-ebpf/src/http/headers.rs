@@ -21,6 +21,8 @@ use ulb_common::{
 };
 
 use crate::{
+    BPF_LOOP_NEXT,
+    BPF_LOOP_STOP,
     debug,
     http::{
         CH_COLON,
@@ -31,9 +33,6 @@ use crate::{
     },
     utils::SkbData,
 };
-
-const BPF_LOOP_NEXT: c_long = 0;
-const BPF_LOOP_STOP: c_long = 1;
 
 struct LoopContext<'a> {
     ctx: &'a SkBuffContext,

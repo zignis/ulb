@@ -14,6 +14,7 @@ use ulb_common::ir::{
     MAX_BACKEND_CONNECTION_POOL_SIZE,
     MAX_BACKENDS_PER_CLUSTER,
     MAX_CLUSTERS,
+    MAX_HEADER_RULES_PER_ROUTE,
     MAX_LISTENERS,
     MAX_VHOSTS,
 };
@@ -58,6 +59,17 @@ fn validate_config(cfg: UlbConfig) -> anyhow::Result<UlbConfig> {
                 "exceeded maximum vhosts ({}/{MAX_VHOSTS})",
                 listener.hosts.len()
             );
+        }
+
+        for host in &listener.hosts {
+            for route in &host.routes {
+                if route.headers.len() > MAX_HEADER_RULES_PER_ROUTE {
+                    bail!(
+                        "exceeded maximum headers per route ({}/{MAX_HEADER_RULES_PER_ROUTE})",
+                        route.headers.len()
+                    );
+                }
+            }
         }
     }
 

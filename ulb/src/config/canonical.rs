@@ -7,10 +7,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use ulb_common::ir::{
-    MAX_BACKEND_CONNECTION_POOL_SIZE,
-    RouteMatchType,
-};
+use ulb_common::ir::MAX_BACKEND_CONNECTION_POOL_SIZE;
 
 pub type BackendConnectionPoolIdx = u32;
 
@@ -47,10 +44,17 @@ pub enum RouteAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeaderMatchConfig {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RouteConfig {
     pub path: String,
-    pub match_type: RouteMatchType,
     pub methods: Vec<String>,
+    #[serde(default)]
+    pub headers: Vec<HeaderMatchConfig>,
     pub action: RouteAction,
 }
 
