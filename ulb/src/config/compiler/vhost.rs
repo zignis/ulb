@@ -12,11 +12,9 @@ use ulb_common::{
     ir::{
         HeaderMatch,
         HeaderMatchType,
-        MAX_HEADER_RULES_PER_ROUTE,
         MAX_ROUTES,
         MAX_ROUTES_PER_VHOST,
         PATH_MAX_LEN,
-        RouteAction,
         RouteMatchType,
         RouteValue,
         VHostKey,
