@@ -21,6 +21,8 @@ use ulb_common::{
 };
 
 use crate::{
+    BPF_LOOP_NEXT,
+    BPF_LOOP_STOP,
     debug,
     http::{
         CH_COLON,
@@ -31,9 +33,6 @@ use crate::{
     },
     utils::SkbData,
 };
-
-const BPF_LOOP_NEXT: c_long = 0;
-const BPF_LOOP_STOP: c_long = 1;
 
 struct LoopContext<'a> {
     ctx: &'a SkBuffContext,
@@ -183,6 +182,13 @@ fn parse_header(
     hdr.key[colon_pos] = 0;
     hdr.key.len = colon_pos as u32;
 
+    // zero out the remaining bits in the first 8 bytes for integer tag matching
+    if colon_pos < size_of::<u64>() {
+        for i in colon_pos..size_of::<u64>() {
+            hdr.key[i] = 0;
+        }
+    }
+
     // value
     let mut value_len: usize = 0;
     let mut value_start = offset + colon_pos + 1;
@@ -221,6 +227,13 @@ fn parse_header(
 
     hdr.value[value_len] = 0;
     hdr.value.len = value_len as u32;
+
+    // zero out the remaining bits in the first 8 bytes for integer tag matching
+    if value_len < size_of::<u64>() {
+        for i in value_len..size_of::<u64>() {
+            hdr.value[i] = 0;
+        }
+    }
 
     let last_char = unsafe { data.at_unchecked(value_start + value_len) };
     let delimiter_size = 1 + (last_char == CH_CR) as usize;
