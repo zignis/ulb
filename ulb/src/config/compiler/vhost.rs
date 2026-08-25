@@ -5,13 +5,19 @@ use anyhow::{
     bail,
 };
 use ulb_common::{
+    HTTP_HDR_KEY_MAX_LEN,
     HTTP_HDR_VAL_MAX_LEN,
     HttpMethod,
     containers::BoundedStr,
     ir::{
+        HeaderMatch,
+        HeaderMatchType,
+        MAX_HEADER_RULES_PER_ROUTE,
         MAX_ROUTES,
         MAX_ROUTES_PER_VHOST,
         PATH_MAX_LEN,
+        RouteAction,
+        RouteMatchType,
         RouteValue,
         VHostKey,
         VHostValue,
@@ -67,18 +73,55 @@ pub fn compile_vhosts(
             );
 
             for route_cfg in &vhost.routes {
+                let (path, match_type) = if let Some(prefix) = route_cfg.path.strip_suffix("*") {
+                    (prefix.to_string(), RouteMatchType::Prefix)
+                } else {
+                    (route_cfg.path.clone(), RouteMatchType::Exact)
+                };
+
                 let mut route = RouteValue {
-                    path: BoundedStr::try_from(route_cfg.path.as_str()).map_err(|_| {
+                    path: BoundedStr::try_from(path.as_str()).map_err(|_| {
                         anyhow!(
-                            "path `{}` is too long ({}/{PATH_MAX_LEN})",
-                            route_cfg.path,
-                            route_cfg.path.len()
+                            "resolved path `{path}` is too long ({}/{PATH_MAX_LEN})",
+                            path.len()
                         )
                     })?,
                     method_mask: 0,
-                    match_type: route_cfg.match_type,
+                    match_type,
                     action: ulb_common::ir::RouteAction::Drop,
+                    headers: Default::default(),
                 };
+
+                for hdr_cfg in &route_cfg.headers {
+                    let (value, match_type) = if hdr_cfg.value == "*" {
+                        ("".to_string(), HeaderMatchType::Present)
+                    } else if let Some(prefix) = hdr_cfg.value.strip_suffix("*") {
+                        (prefix.to_string(), HeaderMatchType::Prefix)
+                    } else {
+                        (hdr_cfg.value.clone(), HeaderMatchType::Exact)
+                    };
+
+                    let hdr = HeaderMatch {
+                        name: BoundedStr::try_from(hdr_cfg.name.as_str()).map_err(|_| {
+                            anyhow!(
+                                "header name `{}` is too long ({}/{HTTP_HDR_KEY_MAX_LEN})",
+                                hdr_cfg.name,
+                                hdr_cfg.name.len()
+                            )
+                        })?,
+                        value: BoundedStr::try_from(value.as_str()).map_err(|_| {
+                            anyhow!(
+                                "resolved header value `{value}` is too long ({}/{HTTP_HDR_VAL_MAX_LEN})",
+                                value.len()
+                            )
+                        })?,
+                        match_type,
+                    };
+
+                    if route.headers.push(hdr).is_err() {
+                        bail!("infallible");
+                    }
+                }
 
                 for method_val in &route_cfg.methods {
                     let method = HttpMethod::try_from(method_val.as_str())
