@@ -47,6 +47,8 @@ pub enum RouteAction {
 pub struct HeaderMatchConfig {
     pub name: String,
     pub value: String,
+    #[serde(default)]
+    pub case_insensitive: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
