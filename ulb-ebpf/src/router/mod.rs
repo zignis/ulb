@@ -13,6 +13,7 @@ use ulb_common::{
 };
 
 use crate::{
+    BPF_SKB_EGRESS,
     debug,
     maps::{
         BACKEND_CONNECTION_MAP,
@@ -61,7 +62,8 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
                 return Err(());
             }
 
-            if BACKEND_CONNECTION_MAP.redirect_skb(ctx, &mut backend_cookie, 0) == (SK_PASS as i64)
+            if BACKEND_CONNECTION_MAP.redirect_skb(ctx, &mut backend_cookie, BPF_SKB_EGRESS)
+                == (SK_PASS as i64)
             {
                 return Ok(SK_PASS);
             }

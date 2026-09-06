@@ -11,6 +11,7 @@ use aya_ebpf::{
 use ulb_common::JMP_PROG_ROUTING;
 
 use crate::{
+    BPF_SKB_EGRESS,
     debug,
     http::parse_req,
     maps::{
@@ -34,7 +35,7 @@ fn client_stream_verdict(ctx: SkBuffContext) -> u32 {
 
     // fast-path
     if let Some(mut backend) = unsafe { SESSION_MAP.get(cookie) }.copied() {
-        return BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut backend, 0) as u32;
+        return BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut backend, BPF_SKB_EGRESS) as u32;
     }
 
     if unsafe { bpf_skb_pull_data(ctx.skb.skb, 0) } < 0 {
@@ -67,7 +68,7 @@ fn backend_stream_verdict(ctx: SkBuffContext) -> u32 {
 
     // fast-path
     if let Some(mut client) = unsafe { SESSION_MAP.get(cookie) }.copied() {
-        return CLIENT_CONNECTION_MAP.redirect_skb(&ctx, &mut client, 0) as u32;
+        return CLIENT_CONNECTION_MAP.redirect_skb(&ctx, &mut client, BPF_SKB_EGRESS) as u32;
     }
 
     SK_DROP
