@@ -184,7 +184,7 @@ fn parse_header(
     let mut value_len: usize = 0;
     let mut value_start = offset + colon_pos + 1;
 
-    // space after colon
+    // optional whitespace after colon: https://www.rfc-editor.org/rfc/rfc9112.html#name-field-line-parsing
     if data.at(value_start) == Some(CH_SP) {
         value_start += 1;
     }
