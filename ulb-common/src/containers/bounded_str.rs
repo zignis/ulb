@@ -14,7 +14,7 @@ use core::ops::{
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "user", derive(PartialEq, Eq, Hash))]
 pub struct BoundedStr<const MAX_SIZE: usize> {
-    pub len: u32,
+    pub len: u64,
     pub data: [u8; MAX_SIZE],
 }
 
@@ -77,7 +77,7 @@ impl<const MAX_SIZE: usize> TryFrom<&str> for BoundedStr<MAX_SIZE> {
         data[..len].copy_from_slice(bytes);
 
         Ok(Self {
-            len: len as u32,
+            len: len as u64,
             data,
         })
     }

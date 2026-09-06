@@ -140,7 +140,7 @@ pub fn parse_request_line(
 
     let uri_start = method_end + 1;
     let uri_len = parse_uri_len(data, uri_start)?;
-    req.uri.len = uri_len as u32;
+    req.uri.len = uri_len as u64;
 
     if unsafe {
         bpf_skb_load_bytes(
