@@ -28,6 +28,17 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
             self.data[len..].fill(0);
         }
     }
+
+    pub fn make_ascii_lowercase(&mut self) {
+        for i in 0..MAX_SIZE {
+            if i >= self.len as usize {
+                break;
+            }
+
+            let byte = &mut self.data[i];
+            byte.make_ascii_lowercase();
+        }
+    }
 }
 
 impl<const MAX_SIZE: usize> Default for BoundedStr<MAX_SIZE> {

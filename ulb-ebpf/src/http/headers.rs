@@ -90,9 +90,7 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
             }
 
             // TODO: temporary fix to ignore client's keepalive preference
-            if hdr.key.len == 10
-                && (&hdr.key[..10] == b"Connection" || &hdr.key[..10] == b"connection")
-            {
+            if hdr.key.len == 10 && (&hdr.key.data[..10] == b"connection") {
                 // TODO: no need to replace if hdr value is `keepalive`
                 let offset = loop_ctx.req._offset;
                 let filler = b"x-ulb-fill";
@@ -178,7 +176,9 @@ fn parse_header(
     }
 
     hdr.key[colon_pos] = 0;
-    hdr.key.len = colon_pos as u32;
+    hdr.key.len = colon_pos as u64;
+    // keys are always ascii and case-insensitive: https://www.rfc-editor.org/rfc/rfc9112.html#name-field-syntax
+    hdr.key.make_ascii_lowercase();
 
     // value
     let mut value_len: usize = 0;
@@ -217,7 +217,7 @@ fn parse_header(
     }
 
     hdr.value[value_len] = 0;
-    hdr.value.len = value_len as u32;
+    hdr.value.len = value_len as u64;
 
     let last_char = unsafe { data.at_unchecked(value_start + value_len) };
     let delimiter_size = 1 + (last_char == CH_CR) as usize;
