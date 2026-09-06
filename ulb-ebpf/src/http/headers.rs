@@ -85,10 +85,8 @@ extern "C" fn callback(idx: usize, ctx: *mut c_void) -> c_long {
                 return BPF_LOOP_STOP;
             }
 
-            // TODO: impl case-insensitive matching for host header
-            if hdr.key.len == 4 && (&hdr.key[..4] == b"host" || &hdr.key[..4] == b"Host") {
-                // host bytes must be zeroed out for valid hashing
-                loop_ctx.req.host.clear_and_copy(hdr.value);
+            if hdr.key.len == 4 && (&hdr.key.data[..4] == b"host") {
+                loop_ctx.req.host.clear_and_copy(&hdr.value);
             }
 
             // TODO: temporary fix to ignore client's keepalive preference
