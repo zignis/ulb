@@ -198,20 +198,20 @@ impl BackendManager {
                 let tx = self.event_tx.clone();
 
                 // TODO: improve error handling; the pool should exist here
-                if let Some(old_cookie) = old_cookie {
-                    if let Ok(mut pool) = backend_conn_pool_table.get(&pool_idx, 0) {
-                        // TODO: make this remove by value method internal to BoundedVec
-                        if let Some(idx) = pool
-                            .connections
-                            .iter()
-                            .position(|&cookie| cookie == old_cookie)
-                        {
-                            pool.connections.remove(idx);
+                if let Some(old_cookie) = old_cookie
+                    && let Ok(mut pool) = backend_conn_pool_table.get(&pool_idx, 0)
+                {
+                    // TODO: make this remove by value method internal to BoundedVec
+                    if let Some(idx) = pool
+                        .connections
+                        .iter()
+                        .position(|&cookie| cookie == old_cookie)
+                    {
+                        pool.connections.remove(idx);
 
-                            if let Err(err) = backend_conn_pool_table.set(pool_idx, pool, 0) {
-                                error!("failed to shrink connection pool: {err}");
-                                return; // TODO: should not reconnect if pool can't be shrinked
-                            }
+                        if let Err(err) = backend_conn_pool_table.set(pool_idx, pool, 0) {
+                            error!("failed to shrink connection pool: {err}");
+                            return; // TODO: should not reconnect if pool can't be shrinked
                         }
                     }
                 }
