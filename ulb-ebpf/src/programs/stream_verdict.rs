@@ -24,7 +24,7 @@ use crate::{
 };
 
 #[stream_verdict]
-fn client_stream_verdict(ctx: SkBuffContext) -> u32 {
+fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
 
     debug!(
@@ -57,7 +57,7 @@ fn client_stream_verdict(ctx: SkBuffContext) -> u32 {
 }
 
 #[stream_verdict]
-fn backend_stream_verdict(ctx: SkBuffContext) -> u32 {
+fn ulb_backend_stream_verdict(ctx: SkBuffContext) -> u32 {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
 
     debug!(
@@ -75,6 +75,11 @@ fn backend_stream_verdict(ctx: SkBuffContext) -> u32 {
 }
 
 #[stream_verdict]
-fn router(ctx: SkBuffContext) -> u32 {
-    route_req(&ctx).unwrap_or(SK_DROP)
+fn ulb_header_parser(ctx: SkBuffContext) -> u32 {
+    parse_headers(&ctx)
+}
+
+#[stream_verdict]
+fn ulb_router(ctx: SkBuffContext) -> u32 {
+    route_req(&ctx)
 }

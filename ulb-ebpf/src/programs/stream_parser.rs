@@ -20,7 +20,7 @@ use crate::{
 const CRLF_CRLF: u32 = b32(b"\r\n\r\n"); // signifies end of headers
 
 #[stream_parser]
-fn stream_parser(ctx: SkBuffContext) -> u32 {
+fn ulb_stream_parser(ctx: SkBuffContext) -> u32 {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
 
     // fast-path
