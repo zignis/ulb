@@ -5,19 +5,9 @@ use serde::{
 };
 
 use crate::{
-    HTTP_HDR_KEY_MAX_LEN,
-    HTTP_HDR_VAL_MAX_LEN,
-    containers::{
-        BoundedStr,
-        BoundedVec,
-    },
-    ir::{
-        MAX_HEADER_RULES_PER_ROUTE,
-        PATH_MAX_LEN,
-    },
+    HTTP_URI_MAX_LEN,
+    containers::BoundedStr,
 };
-
-// TODO: support more complex matching (wildcards, optionals)
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -27,39 +17,19 @@ pub enum RouteMatchType {
     Exact,
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Default)]
-#[cfg_attr(feature = "user", derive(Serialize, Deserialize))]
-pub enum HeaderMatchType {
-    Prefix,
-    Exact,
-    #[default]
-    Present,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub enum RouteAction {
-    Forward { cluster_idx: u32 }, // index into backend cluster
-    Drop,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Default)]
-pub struct HeaderMatch {
-    pub name: BoundedStr<HTTP_HDR_KEY_MAX_LEN>,
-    pub value: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
-    pub match_type: HeaderMatchType,
-}
+pub const ROUTE_ACTION_DROP: u32 = u32::MAX;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct RouteValue {
-    pub path: BoundedStr<PATH_MAX_LEN>, // match string
-    pub method_mask: u16,               // bitmask of allowed http methods
+    // 8B align
+    pub path: BoundedStr<HTTP_URI_MAX_LEN>, // match string
+    // 8B align
     pub match_type: RouteMatchType,
-    pub action: RouteAction,
-    pub headers: BoundedVec<HeaderMatch, MAX_HEADER_RULES_PER_ROUTE>,
+    pub method_mask: u32, // bitmask of allowed http methods
+    // 8B align
+    pub required_headers_mask: u32, // bitmask of header rules that must match
+    pub action: u32,                // drop action if == u32::MAX; idx into cluster table otherwise
 }
 
 #[cfg(feature = "user")]
@@ -67,12 +37,3 @@ unsafe impl aya::Pod for RouteValue {}
 
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for RouteMatchType {}
-
-#[cfg(feature = "user")]
-unsafe impl aya::Pod for HeaderMatch {}
-
-#[cfg(feature = "user")]
-unsafe impl aya::Pod for HeaderMatchType {}
-
-#[cfg(feature = "user")]
-unsafe impl aya::Pod for RouteAction {}
