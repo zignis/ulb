@@ -29,7 +29,7 @@ use crate::{
 };
 
 #[sock_ops]
-fn sock_ops(ctx: SockOpsContext) -> u32 {
+fn ulb_sock_ops(ctx: SockOpsContext) -> u32 {
     match ctx.op() {
         // remove stale mapping from SESSION_MAP
         BPF_SOCK_OPS_STATE_CB if matches!(ctx.arg(1), BPF_TCP_CLOSE | BPF_TCP_TIME_WAIT) => {
