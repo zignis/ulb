@@ -5,6 +5,7 @@ extern crate alloc;
 
 pub mod containers;
 pub mod ir;
+pub mod utils;
 
 #[cfg(feature = "debug")]
 use core::ffi::CStr;
