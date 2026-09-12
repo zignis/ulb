@@ -158,13 +158,44 @@ pub struct HttpRequest {
     pub version: HttpVersion,
     pub uri: BoundedStr<HTTP_URI_MAX_LEN>,
     pub host: BoundedStr<HTTP_HDR_VAL_MAX_LEN>, // `Host` header value
-    pub headers: BoundedVec<HttpHeader, HTTP_MAX_HEADERS>,
+    // bit "x" is set in u32 if header rule "x" for this route is satisfied
+    pub satisfied_rule_masks: [u32; MAX_ROUTES as usize],
+    // to speedup reset_mask for next request
+    pub dirty_route_idx: BoundedVec<u32, { MAX_ROUTES as usize }>,
+    pub dirty_route_map: [bool; MAX_ROUTES as usize],
     // -- internal
     pub _offset: u32, // read offset
 }
 
 impl HttpRequest {
-    pub fn reset_headers(&mut self) {
-        self.headers.len = 0;
+    pub fn mark_route_dirty(&mut self, route_idx: usize) {
+        if !self.dirty_route_map[route_idx] {
+            self.dirty_route_map[route_idx] = true;
+
+            let len = self.dirty_route_idx.len;
+            if len < MAX_ROUTES as u64 {
+                self.dirty_route_idx[len as usize] = route_idx as u32;
+                self.dirty_route_idx.len += 1;
+            }
+        }
+    }
+
+    pub fn reset_rule_masks(&mut self) {
+        let len = self.dirty_route_idx.len as usize;
+
+        for i in 0..(MAX_ROUTES as usize) {
+            if i >= len {
+                break;
+            }
+
+            let route_idx = self.dirty_route_idx[i] as usize;
+
+            if route_idx < MAX_ROUTES as usize {
+                self.satisfied_rule_masks[route_idx] = 0;
+                self.dirty_route_map[route_idx] = false;
+            }
+        }
+
+        self.dirty_route_idx.reset();
     }
 }
