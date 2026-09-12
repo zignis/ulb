@@ -33,16 +33,16 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
     let vhost = match resolve_vhost(req, local_port as u64) {
         Some(x) => x,
         None => {
-            debug!(&ctx, "no vhost matched");
-            return Ok(SK_PASS);
+            debug!(&ctx, "[D:2] no vhost matched");
+            return SK_PASS;
         }
     };
 
     let route = match route::match_route(req, vhost) {
         Some(x) => x,
         None => {
-            debug!(&ctx, "no route matched");
-            return Ok(SK_PASS);
+            debug!(&ctx, "[D:2] no route matched");
+            return SK_PASS;
         }
     };
 
@@ -57,9 +57,12 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
 
             #[allow(unused_variables)]
             if let Err(eno) = SESSION_MAP.insert(client_cookie, backend_cookie, 0) {
-                debug!(&ctx, "failed to insert client->backend session ({})", eno);
-                let _ = SESSION_MAP.remove(backend_cookie); // remove mapping inserted by cluster::select_backend
-                return Err(());
+                error!(
+                    &ctx,
+                    "[E:2] failed to insert client->backend session ({})", eno
+                );
+                let _ = SESSION_MAP.remove(backend_cookie); // remove mapping inserted by select_backend
+                return SK_DROP;
             }
 
             if BACKEND_CONNECTION_MAP.redirect_skb(ctx, &mut backend_cookie, BPF_SKB_EGRESS)

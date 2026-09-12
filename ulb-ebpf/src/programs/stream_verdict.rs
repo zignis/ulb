@@ -19,7 +19,6 @@ use crate::{
     maps::{
         BACKEND_CONNECTION_MAP,
         CLIENT_CONNECTION_MAP,
-        JMP_TABLE,
         SESSION_MAP,
     },
     router::route_req,
@@ -29,11 +28,7 @@ use crate::{
 fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
 
-    debug!(
-        ctx,
-        "client connection arrived for verdict ({}B)",
-        ctx.len()
-    );
+    debug!(ctx, "[D:1] client connection arrived ({}B)", ctx.len());
 
     // fast-path
     if let Some(mut backend) = unsafe { SESSION_MAP.get(cookie) }.copied() {
@@ -51,11 +46,7 @@ fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
 fn ulb_backend_stream_verdict(ctx: SkBuffContext) -> u32 {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) };
 
-    debug!(
-        ctx,
-        "backend connection arrived for verdict ({}B)",
-        ctx.len()
-    );
+    debug!(ctx, "[D:4] response from backend ({}B)", ctx.len());
 
     // fast-path
     if let Some(mut client) = unsafe { SESSION_MAP.get(cookie) }.copied() {

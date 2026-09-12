@@ -267,10 +267,7 @@ impl BackendManager {
                 if let Err(err) = backend_map.insert(new_cookie, stream.as_raw_fd(), 0) {
                     error!("failed to insert socket into BACKEND_CONNECTION_MAP: {err}");
                 } else {
-                    info!(
-                        "inserted backend {} into BACKEND_CONNECTION_MAP",
-                        new_cookie
-                    );
+                    info!("inserted CK:{} into BACKEND_CONNECTION_MAP", new_cookie);
                 }
 
                 Self::spawn_connection_monitor(

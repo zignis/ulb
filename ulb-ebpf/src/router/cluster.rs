@@ -11,6 +11,7 @@ use crate::{
         CLUSTER_TABLE,
         SESSION_MAP,
     },
+    warn,
 };
 
 const MAX_BACKEND_SELECT_ATTEMPTS: u32 = 8;
@@ -47,7 +48,10 @@ fn claim_connection(
             )
             .is_ok()
         {
-            debug!(ctx, "claimed backend {} from pool {}", *cookie, pool_idx);
+            debug!(
+                ctx,
+                "[D:3] claimed backend (CK:{}) from pool {}", *cookie, pool_idx
+            );
             return Some(*cookie);
         }
     }
@@ -63,7 +67,7 @@ pub fn select_backend(
     let cluster = CLUSTER_TABLE.get_ptr_mut(cluster_idx).ok_or(())?;
     let len = unsafe { (*cluster).backends.len } as u32;
 
-    debug!(ctx, "cluster {} has {} backends", cluster_idx, len);
+    debug!(ctx, "[D:3] cluster {} has {} backends", cluster_idx, len);
 
     if len == 0 {
         return Err(());
@@ -85,7 +89,7 @@ pub fn select_backend(
         }
     }
 
-    debug!(ctx, "no backend available");
+    warn!(ctx, "[E:3] no backend available");
 
     // TODO(future): fallback to userspace proxy when no backend are available
 
