@@ -64,14 +64,20 @@ impl From<HttpMethod> for u16 {
     }
 }
 
+impl From<HttpMethod> for u32 {
+    fn from(value: HttpMethod) -> Self {
+        value as u32
+    }
+}
+
 impl HttpMethod {
-    pub fn match_mask(&self, mask: u16) -> bool {
+    pub fn match_mask(&self, mask: u32) -> bool {
         // if no allowed methods are specified by user, allow all methods
         if mask == 0 {
             return true;
         }
 
-        (mask & u16::from(*self)) != 0
+        (mask & u32::from(*self)) != 0
     }
 
     #[cfg(feature = "debug")]
