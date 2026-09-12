@@ -25,11 +25,20 @@ pub const JMP_PROG_HEADER_PARSER: u32 = 1;
 pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024;
 
 // headers
-pub const HTTP_MAX_HEADERS: usize = 256;
+pub const HTTP_MAX_HEADERS: usize = 256; // TODO: try to increase this since we're matching headers on the fly
+
+// must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
+// verifier bound checks)
 pub const HTTP_HDR_KEY_MAX_LEN: usize = 32;
-pub const HTTP_HDR_VAL_MAX_LEN: usize = 64;
+
+// must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
+// verifier bound checks)
+pub const HTTP_HDR_VAL_MAX_LEN: usize = 128; // TODO: try to increase this to maximum possible
 
 // req line
+
+// must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
+// verifier bound checks)
 pub const HTTP_URI_MAX_LEN: usize = 256;
 
 pub type SocketCookie = u64;
