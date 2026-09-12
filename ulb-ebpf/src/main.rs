@@ -4,10 +4,10 @@
 use core::ffi::c_long;
 
 mod http;
-mod log;
 mod maps;
 mod programs;
 mod router;
+mod telemetry;
 mod utils;
 
 // bpf_loop return values
