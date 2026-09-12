@@ -103,17 +103,26 @@ pub fn compile_vhosts(
 
                 for (i, hdr_cfg) in route_cfg.headers.iter().enumerate() {
                     route.required_headers_mask |= 1 << i;
-                    let val_pattern = &hdr_cfg.value;
+
+                    let (val, match_type) = match hdr_cfg.value.as_str() {
+                        "*" => ("", HeaderValueMatchType::Any),
+                        x if x.ends_with("*") && !x.ends_with("\\*") => {
+                            (&x[..x.len() - 1], HeaderValueMatchType::Prefix)
+                        }
+                        x if x.starts_with("*") => (&x[1..], HeaderValueMatchType::Suffix),
+                        x => (x, HeaderValueMatchType::Exact),
+                    };
+                    let val = val.replace("\\*", "*"); // escape seq
 
                     let mut rule = HeaderRule {
-                        value: BoundedStr::try_from(val_pattern.as_str()).map_err(|_| {
+                        value: BoundedStr::try_from(val.as_str()).map_err(|_| {
                             anyhow!(
                                 "header value pattern `{}` is too long ({}/{HTTP_HDR_VAL_MAX_LEN})",
                                 hdr_cfg.value,
-                                hdr_cfg.value.len()
+                                val.len()
                             )
                         })?,
-                        match_type: HeaderValueMatchType::Exact,
+                        match_type,
                         case_insensitive: u32::from(hdr_cfg.case_insensitive),
                         route_idx: route_table.len() as u32,
                         route_bit_idx: i as u32,
