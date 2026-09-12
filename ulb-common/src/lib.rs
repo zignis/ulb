@@ -21,8 +21,8 @@ pub const JMP_PROG_COUNT: u32 = 2;
 pub const JMP_PROG_ROUTER: u32 = 0;
 pub const JMP_PROG_HEADER_PARSER: u32 = 1;
 
-// -4 to keep loop iterations under verifier's 8192 jump limit
-pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024 - 4; // around 8kb for req line and headers
+// around 8kb for req line and headers
+pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024;
 
 // headers
 pub const HTTP_MAX_HEADERS: usize = 256;
