@@ -30,7 +30,7 @@ pub fn route_req(ctx: &SkBuffContext) -> Result<u32, ()> {
     let req = get_http_buf().ok_or(())?;
     let local_port = ctx.skb.local_port();
 
-    let vhost = match vhost::resolve_vhost(req, local_port) {
+    let vhost = match resolve_vhost(req, local_port as u64) {
         Some(x) => x,
         None => {
             debug!(&ctx, "no vhost matched");
