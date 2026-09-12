@@ -1,7 +1,10 @@
 pub mod native;
 
 use std::{
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     fs,
     path::Path,
 };
@@ -53,7 +56,13 @@ fn validate_config(cfg: UlbConfig) -> anyhow::Result<UlbConfig> {
         );
     }
 
+    let mut listener_addrs = HashSet::new();
+
     for listener in &cfg.listeners {
+        if !listener_addrs.insert(listener.addr) {
+            bail!("unexpected duplicate listener: `{}`", listener.addr);
+        }
+
         if listener.hosts.len() >= MAX_VHOSTS as usize {
             bail!(
                 "exceeded maximum vhosts ({}/{MAX_VHOSTS})",

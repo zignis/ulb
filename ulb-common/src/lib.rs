@@ -5,27 +5,40 @@ extern crate alloc;
 
 pub mod containers;
 pub mod ir;
+pub mod utils;
 
 #[cfg(feature = "debug")]
 use core::ffi::CStr;
 
 use containers::*;
+use ir::*;
+use utils::*;
 
-// total programs for available for tail call
-pub const JMP_PROG_COUNT: u32 = 1;
+// total programs available for tail call
+pub const JMP_PROG_COUNT: u32 = 2;
 
 // prog idx for tail calls
-pub const JMP_PROG_ROUTING: u32 = 0;
+pub const JMP_PROG_ROUTER: u32 = 0;
+pub const JMP_PROG_HEADER_PARSER: u32 = 1;
 
-// -4 to keep loop iterations under verifier's 8192 jump limit
-pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024 - 4; // around 8kb for req line and headers
+// around 8kb for req line and headers
+pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024;
 
 // headers
-pub const HTTP_MAX_HEADERS: usize = 256;
+pub const HTTP_MAX_HEADERS: usize = 256; // TODO: try to increase this since we're matching headers on the fly
+
+// must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
+// verifier bound checks)
 pub const HTTP_HDR_KEY_MAX_LEN: usize = 32;
-pub const HTTP_HDR_VAL_MAX_LEN: usize = 64;
+
+// must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
+// verifier bound checks)
+pub const HTTP_HDR_VAL_MAX_LEN: usize = 128; // TODO: try to increase this to maximum possible
 
 // req line
+
+// must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
+// verifier bound checks)
 pub const HTTP_URI_MAX_LEN: usize = 256;
 
 pub type SocketCookie = u64;
@@ -51,14 +64,20 @@ impl From<HttpMethod> for u16 {
     }
 }
 
+impl From<HttpMethod> for u32 {
+    fn from(value: HttpMethod) -> Self {
+        value as u32
+    }
+}
+
 impl HttpMethod {
-    pub fn match_mask(&self, mask: u16) -> bool {
+    pub fn match_mask(&self, mask: u32) -> bool {
         // if no allowed methods are specified by user, allow all methods
         if mask == 0 {
             return true;
         }
 
-        (mask & u16::from(*self)) != 0
+        (mask & u32::from(*self)) != 0
     }
 
     #[cfg(feature = "debug")]
@@ -120,7 +139,16 @@ impl HttpVersion {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HttpHeader {
     pub key: BoundedStr<HTTP_HDR_KEY_MAX_LEN>,
-    pub value: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
+    pub val: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
+}
+
+impl HttpHeader {
+    // resets the len of key and val
+    // does not zero out the buffer
+    pub fn reset(&mut self) {
+        self.key.len = 0;
+        self.val.len = 0;
+    }
 }
 
 #[repr(C)]
@@ -130,13 +158,44 @@ pub struct HttpRequest {
     pub version: HttpVersion,
     pub uri: BoundedStr<HTTP_URI_MAX_LEN>,
     pub host: BoundedStr<HTTP_HDR_VAL_MAX_LEN>, // `Host` header value
-    pub headers: BoundedVec<HttpHeader, HTTP_MAX_HEADERS>,
+    // bit "x" is set in u32 if header rule "x" for this route is satisfied
+    pub satisfied_rule_masks: [u32; MAX_ROUTES as usize],
+    // to speedup reset_mask for next request
+    pub dirty_route_idx: BoundedVec<u32, { MAX_ROUTES as usize }>,
+    pub dirty_route_map: [bool; MAX_ROUTES as usize],
     // -- internal
     pub _offset: u32, // read offset
 }
 
 impl HttpRequest {
-    pub fn reset_headers(&mut self) {
-        self.headers.len = 0;
+    pub fn mark_route_dirty(&mut self, route_idx: usize) {
+        if !self.dirty_route_map[route_idx] {
+            self.dirty_route_map[route_idx] = true;
+
+            let len = self.dirty_route_idx.len;
+            if len < MAX_ROUTES as u64 {
+                self.dirty_route_idx[len as usize] = route_idx as u32;
+                self.dirty_route_idx.len += 1;
+            }
+        }
+    }
+
+    pub fn reset_rule_masks(&mut self) {
+        let len = self.dirty_route_idx.len as usize;
+
+        for i in 0..(MAX_ROUTES as usize) {
+            if i >= len {
+                break;
+            }
+
+            let route_idx = self.dirty_route_idx[i] as usize;
+
+            if route_idx < MAX_ROUTES as usize {
+                self.satisfied_rule_masks[route_idx] = 0;
+                self.dirty_route_map[route_idx] = false;
+            }
+        }
+
+        self.dirty_route_idx.reset();
     }
 }

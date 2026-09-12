@@ -17,7 +17,7 @@ pub struct BoundedVec<T, const MAX_SIZE: usize>
 where
     T: Copy + Clone + Default,
 {
-    pub len: u32,
+    pub len: u64,
     pub data: [T; MAX_SIZE],
 }
 
@@ -25,6 +25,11 @@ impl<T, const MAX_SIZE: usize> BoundedVec<T, MAX_SIZE>
 where
     T: Copy + Clone + Default,
 {
+    // only sets the len to 0
+    pub fn reset(&mut self) {
+        self.len = 0;
+    }
+
     #[allow(clippy::result_unit_err)]
     #[cfg(feature = "user")]
     pub fn push(&mut self, element: T) -> Result<(), ()> {
@@ -115,7 +120,7 @@ where
         data[..len].copy_from_slice(&value);
 
         Ok(Self {
-            len: len as u32,
+            len: len as u64,
             data,
         })
     }

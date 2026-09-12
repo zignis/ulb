@@ -4,7 +4,6 @@ use anyhow::anyhow;
 use ulb_common::ir::{
     Backend,
     Cluster,
-    LoadBalancingPolicy,
 };
 
 use crate::config::canonical::{
@@ -32,12 +31,12 @@ pub fn compile_clusters(
             .iter()
             .map(|&pool_idx| Backend {
                 pool_idx,
-                flags: 1, // TODO: reserved for future
+                flags: 0, // future use
             })
             .collect::<Vec<_>>();
 
         clusters.push(Cluster {
-            policy: LoadBalancingPolicy::RoundRobin, // TODO: accept from user config
+            policy: cluster_cfg.policy.unwrap_or_default(),
             backends: backends.try_into().map_err(|_| anyhow!("infallible"))?,
             rr_counter: 0,
         });

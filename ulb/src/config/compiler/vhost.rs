@@ -7,14 +7,16 @@ use anyhow::{
 use ulb_common::{
     HTTP_HDR_KEY_MAX_LEN,
     HTTP_HDR_VAL_MAX_LEN,
+    HTTP_URI_MAX_LEN,
     HttpMethod,
     containers::BoundedStr,
     ir::{
-        HeaderMatch,
-        HeaderMatchType,
+        HDR_RULE_SENTINEL,
+        HeaderRule,
+        HeaderValueMatchType,
         MAX_ROUTES,
         MAX_ROUTES_PER_VHOST,
-        PATH_MAX_LEN,
+        ROUTE_ACTION_DROP,
         RouteMatchType,
         RouteValue,
         VHostKey,
@@ -28,12 +30,22 @@ use crate::config::canonical::{
     UlbConfig,
 };
 
+#[derive(Debug)]
+pub struct CompiledVHosts {
+    pub vhost_map: HashMap<VHostKey, VHostValue>,
+    pub route_table: Vec<RouteValue>,
+    pub header_rule_table: Vec<HeaderRule>,
+    pub header_key_map: HashMap<[u8; HTTP_HDR_KEY_MAX_LEN], u64>,
+}
+
 pub fn compile_vhosts(
     cfg: &UlbConfig,
     cluster_idx_map: ClusterIdxMap,
-) -> anyhow::Result<(HashMap<VHostKey, VHostValue>, Vec<RouteValue>)> {
+) -> anyhow::Result<CompiledVHosts> {
     let mut vhost_map = HashMap::new();
     let mut route_table = Vec::new();
+    let mut header_rule_table: Vec<HeaderRule> = Vec::new();
+    let mut header_key_map = HashMap::new();
 
     for listener in &cfg.listeners {
         let port = listener.addr.port();
@@ -55,7 +67,7 @@ pub fn compile_vhosts(
 
             vhost_map.insert(
                 VHostKey {
-                    port: port as u32,
+                    port: port as u64,
                     host: BoundedStr::try_from(vhost.host.as_str()).map_err(|_| {
                         anyhow!(
                             "host `{}` is too long ({}/{HTTP_HDR_VAL_MAX_LEN})",
@@ -71,69 +83,91 @@ pub fn compile_vhosts(
             );
 
             for route_cfg in &vhost.routes {
-                let (path, match_type) = if let Some(prefix) = route_cfg.path.strip_suffix("*") {
-                    (prefix.to_string(), RouteMatchType::Prefix)
-                } else {
-                    (route_cfg.path.clone(), RouteMatchType::Exact)
+                let (path, match_type) = match route_cfg.path.strip_suffix("*") {
+                    Some(prefix) => (prefix, RouteMatchType::Prefix),
+                    None => (route_cfg.path.as_str(), RouteMatchType::Exact),
                 };
 
                 let mut route = RouteValue {
-                    path: BoundedStr::try_from(path.as_str()).map_err(|_| {
+                    path: BoundedStr::try_from(path).map_err(|_| {
                         anyhow!(
-                            "resolved path `{path}` is too long ({}/{PATH_MAX_LEN})",
+                            "resolved path `{path}` is too long ({}/{HTTP_URI_MAX_LEN})",
                             path.len()
                         )
                     })?,
                     method_mask: 0,
                     match_type,
-                    action: ulb_common::ir::RouteAction::Drop,
-                    headers: Default::default(),
+                    action: ROUTE_ACTION_DROP,
+                    required_headers_mask: 0,
                 };
 
-                for hdr_cfg in &route_cfg.headers {
-                    let (value, match_type) = if hdr_cfg.value == "*" {
-                        ("".to_string(), HeaderMatchType::Present)
-                    } else if let Some(prefix) = hdr_cfg.value.strip_suffix("*") {
-                        (prefix.to_string(), HeaderMatchType::Prefix)
-                    } else {
-                        (hdr_cfg.value.clone(), HeaderMatchType::Exact)
-                    };
+                for (i, hdr_cfg) in route_cfg.headers.iter().enumerate() {
+                    route.required_headers_mask |= 1 << i;
 
-                    let hdr = HeaderMatch {
-                        name: BoundedStr::try_from(hdr_cfg.name.as_str()).map_err(|_| {
+                    let (val, match_type) = match hdr_cfg.value.as_str() {
+                        "*" => ("", HeaderValueMatchType::Any),
+                        x if x.ends_with("*") && !x.ends_with("\\*") => {
+                            (&x[..x.len() - 1], HeaderValueMatchType::Prefix)
+                        }
+                        x if x.starts_with("*") => (&x[1..], HeaderValueMatchType::Suffix),
+                        x => (x, HeaderValueMatchType::Exact),
+                    };
+                    let val = val.replace("\\*", "*"); // escape seq
+
+                    let mut rule = HeaderRule {
+                        value: BoundedStr::try_from(val.as_str()).map_err(|_| {
                             anyhow!(
-                                "header name `{}` is too long ({}/{HTTP_HDR_KEY_MAX_LEN})",
-                                hdr_cfg.name,
-                                hdr_cfg.name.len()
-                            )
-                        })?,
-                        value: BoundedStr::try_from(value.as_str()).map_err(|_| {
-                            anyhow!(
-                                "resolved header value `{value}` is too long ({}/{HTTP_HDR_VAL_MAX_LEN})",
-                                value.len()
+                                "header value pattern `{}` is too long ({}/{HTTP_HDR_VAL_MAX_LEN})",
+                                hdr_cfg.value,
+                                val.len()
                             )
                         })?,
                         match_type,
+                        case_insensitive: u32::from(hdr_cfg.case_insensitive),
+                        route_idx: route_table.len() as u32,
+                        route_bit_idx: i as u32,
+                        next_rule_idx: HDR_RULE_SENTINEL,
                     };
 
-                    if route.headers.push(hdr).is_err() {
-                        bail!("infallible");
+                    if hdr_cfg.case_insensitive {
+                        rule.value.make_ascii_lowercase();
                     }
+
+                    let rule_idx = header_rule_table.len() as u64;
+                    let mut hash = [0_u8; HTTP_HDR_KEY_MAX_LEN];
+                    let lower = hdr_cfg.name.to_ascii_lowercase();
+
+                    if lower.len() > HTTP_HDR_KEY_MAX_LEN {
+                        bail!(
+                            "header name `{}` is too long ({}/{HTTP_HDR_KEY_MAX_LEN})",
+                            hdr_cfg.name,
+                            lower.len()
+                        );
+                    }
+
+                    hash[..lower.len()].copy_from_slice(lower.as_bytes());
+
+                    if let Some(&prev_idx) = header_key_map.get(&hash) {
+                        rule.next_rule_idx = prev_idx;
+                    }
+
+                    header_key_map.insert(hash, rule_idx);
+                    header_rule_table.push(rule);
                 }
 
                 for method_val in &route_cfg.methods {
                     let method = HttpMethod::try_from(method_val.as_str())
                         .map_err(|_| anyhow!("unknown http method: `{method_val}`"))?;
-                    route.method_mask |= method as u16;
+                    route.method_mask |= method as u32;
                 }
 
-                if let RouteAction::Forward { cluster } = &route_cfg.action {
-                    route.action = ulb_common::ir::RouteAction::Forward {
-                        cluster_idx: *cluster_idx_map.get(cluster).ok_or(anyhow!(
+                if let RouteAction::Forward(cluster) = &route_cfg.action {
+                    route.action = *cluster_idx_map.get(cluster).ok_or_else(|| {
+                        anyhow!(
                             "route `{}` forwards to unknown cluster `{cluster}`",
                             route.path,
-                        ))?,
-                    }
+                        )
+                    })?;
                 }
 
                 route_table.push(route);
@@ -141,5 +175,10 @@ pub fn compile_vhosts(
         }
     }
 
-    Ok((vhost_map, route_table))
+    Ok(CompiledVHosts {
+        vhost_map,
+        route_table,
+        header_rule_table,
+        header_key_map,
+    })
 }

@@ -21,6 +21,7 @@ use ulb_common::SocketCookie;
 
 use crate::{
     debug,
+    error,
     maps::{
         CLIENT_CONNECTION_MAP,
         LISTENER_PORTS,
@@ -29,7 +30,7 @@ use crate::{
 };
 
 #[sock_ops]
-fn sock_ops(ctx: SockOpsContext) -> u32 {
+fn ulb_sock_ops(ctx: SockOpsContext) -> u32 {
     match ctx.op() {
         // remove stale mapping from SESSION_MAP
         BPF_SOCK_OPS_STATE_CB if matches!(ctx.arg(1), BPF_TCP_CLOSE | BPF_TCP_TIME_WAIT) => {
@@ -41,7 +42,7 @@ fn sock_ops(ctx: SockOpsContext) -> u32 {
 
                 debug!(
                     &ctx,
-                    "cleared session mapping [{}, {}]", cookie, *other_cookie
+                    "cleared session (CK:{}, CK:{})", cookie, *other_cookie
                 );
             }
         }
@@ -58,7 +59,7 @@ fn sock_ops(ctx: SockOpsContext) -> u32 {
                     // returns the number of bits that were not able to set
                     bpf_sock_ops_cb_flags_set(ctx.ops, next_flags as c_int) != 0
                 } {
-                    debug!(&ctx, "bpf_sock_ops_cb_flags_set failed");
+                    error!(&ctx, "[E:0] `bpf_sock_ops_cb_flags_set` failed");
                 }
 
                 let ret_val = unsafe {
@@ -73,12 +74,14 @@ fn sock_ops(ctx: SockOpsContext) -> u32 {
                 if ret_val == 0 {
                     debug!(
                         &ctx,
-                        "inserted {} to CLIENT_CONNECTION_MAP (listener :{})", cookie, local_port
+                        "inserted CK:{} to CLIENT_CONNECTION_MAP (listener :{})",
+                        cookie,
+                        local_port
                     );
                 } else {
-                    debug!(
+                    error!(
                         &ctx,
-                        "failed to insert {} to CLIENT_CONNECTION_MAP (listener :{}): {}",
+                        "[E:0] failed to insert CK:{} to CLIENT_CONNECTION_MAP (listener :{}): {}",
                         cookie,
                         local_port,
                         ret_val

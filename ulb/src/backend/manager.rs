@@ -55,7 +55,7 @@ pub enum ManagerEvent {
         cluster_idx: u32,
         pool_idx: u32,
         addr: SocketAddr,
-        old_cookie: SocketCookie,
+        old_cookie: Option<SocketCookie>,
     },
     Reconnected {
         cluster_idx: u32,
@@ -149,6 +149,13 @@ impl BackendManager {
 
                         Ok(Err(err)) => {
                             error!("failed to connect to backend {addr}: {err}");
+                            // TODO: max reconnect attempt limit
+                            let _ = self.event_tx.send(ManagerEvent::Disconnect {
+                                cluster_idx: idx as u32,
+                                pool_idx,
+                                addr,
+                                old_cookie: None,
+                            });
                         }
 
                         Err(err) => {
@@ -175,7 +182,7 @@ impl BackendManager {
         Ok(cookie_map)
     }
 
-    pub async fn handle_event(
+    pub fn handle_event(
         &mut self,
         event: ManagerEvent,
         backend_map: &mut SockHash<MapData, SocketCookie>,
@@ -191,7 +198,9 @@ impl BackendManager {
                 let tx = self.event_tx.clone();
 
                 // TODO: improve error handling; the pool should exist here
-                if let Ok(mut pool) = backend_conn_pool_table.get(&pool_idx, 0) {
+                if let Some(old_cookie) = old_cookie
+                    && let Ok(mut pool) = backend_conn_pool_table.get(&pool_idx, 0)
+                {
                     // TODO: make this remove by value method internal to BoundedVec
                     if let Some(idx) = pool
                         .connections
@@ -258,10 +267,7 @@ impl BackendManager {
                 if let Err(err) = backend_map.insert(new_cookie, stream.as_raw_fd(), 0) {
                     error!("failed to insert socket into BACKEND_CONNECTION_MAP: {err}");
                 } else {
-                    info!(
-                        "inserted backend {} into BACKEND_CONNECTION_MAP",
-                        new_cookie
-                    );
+                    info!("inserted CK:{} into BACKEND_CONNECTION_MAP", new_cookie);
                 }
 
                 Self::spawn_connection_monitor(
@@ -345,7 +351,7 @@ impl BackendManager {
                             cluster_idx,
                             pool_idx,
                             addr,
-                            old_cookie: cookie,
+                            old_cookie: Some(cookie),
                         });
 
                         break;

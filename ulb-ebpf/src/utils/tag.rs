@@ -1,6 +1,3 @@
-// TODO: add instructions to docs about building for arch with different
-// endianness
-
 pub const fn b8(bytes: &[u8; 1]) -> u8 {
     u8::from_ne_bytes(*bytes)
 }
