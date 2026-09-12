@@ -35,21 +35,45 @@ fn ulb_stream_parser(ctx: SkBuffContext) -> u32 {
         )
     } < 0
     {
-        // TODO: should we return -ERRCODE and let the userspace drop conn?
         // fwd to stream_verdict which will discard this non-linear packet
         return ctx.len();
     }
 
     let data = SkbData::from_ctx(&ctx);
+    let mut tail = 0;
 
-    for i in 0..HTTP_REQ_MAX_SCRATCH_SIZE {
-        if data.is_length_out_of_bounds(i + 4) {
+    for i in (0..HTTP_REQ_MAX_SCRATCH_SIZE).step_by(5) {
+        tail = i;
+
+        let Some(word) = data.read_u64(i) else {
+            break;
+        };
+
+        if word as u32 == CRLF_CRLF
+            || (word >> 8) as u32 == CRLF_CRLF
+            || (word >> 16) as u32 == CRLF_CRLF
+            || (word >> 24) as u32 == CRLF_CRLF
+            || (word >> 32) as u32 == CRLF_CRLF
+        {
+            return ctx.len();
+        }
+    }
+
+    // check left over bytes
+    for _ in 0..4 {
+        if tail >= HTTP_REQ_MAX_SCRATCH_SIZE {
             break;
         }
 
-        if unsafe { data.match_u32_unchecked(i, CRLF_CRLF) } {
+        if data.is_length_out_of_bounds(tail + 4) {
+            break;
+        }
+
+        if unsafe { data.match_u32_unchecked(tail, CRLF_CRLF) } {
             return ctx.len();
         }
+
+        tail += 1;
     }
 
     // fwd to stream_verdict if \r\n\r\n is not found within scratch size
