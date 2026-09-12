@@ -147,4 +147,16 @@ impl SkbData {
         let bytes = unsafe { self.slice_unchecked::<{ size_of::<u32>() }>(offset) };
         Some(u32::from_ne_bytes(*bytes))
     }
+
+    // u64
+
+    #[inline(always)]
+    pub fn read_u64(&self, offset: usize) -> Option<u64> {
+        if self.is_length_out_of_bounds(offset + size_of::<u64>()) {
+            return None;
+        }
+
+        let bytes = unsafe { self.slice_unchecked::<{ size_of::<u64>() }>(offset) };
+        Some(u64::from_ne_bytes(*bytes))
+    }
 }
