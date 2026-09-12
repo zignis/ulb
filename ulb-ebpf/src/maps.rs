@@ -9,16 +9,19 @@ use aya_ebpf::{
     },
 };
 use ulb_common::{
+    HTTP_HDR_KEY_MAX_LEN,
     HttpRequest,
     JMP_PROG_COUNT,
     SocketCookie,
     ir::{
         BackendConnectionPool,
         Cluster,
+        HeaderRule,
         MAX_BACKEND_CONNECTION_POOLS,
         MAX_BACKEND_CONNECTIONS,
         MAX_CLIENT_CONNECTIONS,
         MAX_CLUSTERS,
+        MAX_HEADER_RULES,
         MAX_ROUTES,
         MAX_SESSIONS,
         MAX_TCP_PORTS,
@@ -60,6 +63,14 @@ pub static ROUTE_TABLE: Array<RouteValue> = Array::with_max_entries(MAX_ROUTES, 
 
 #[map]
 pub static CLUSTER_TABLE: Array<Cluster> = Array::with_max_entries(MAX_CLUSTERS, 0);
+
+#[map]
+pub static HEADER_RULE_TABLE: Array<HeaderRule> = Array::with_max_entries(MAX_HEADER_RULES, 0);
+
+/// {key name, index into HEADER_RULE_TABLE}
+#[map]
+pub static HEADER_KEY_MAP: HashMap<[u8; HTTP_HDR_KEY_MAX_LEN], u64> =
+    HashMap::with_max_entries(MAX_HEADER_RULES, 0);
 
 #[map]
 pub static BACKEND_CONNECTION_POOL_TABLE: Array<BackendConnectionPool> =
