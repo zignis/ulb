@@ -8,12 +8,14 @@ use aya_ebpf::{
     macros::stream_verdict,
     programs::SkBuffContext,
 };
-use ulb_common::JMP_PROG_ROUTING;
 
 use crate::{
     BPF_SKB_EGRESS,
     debug,
-    http::parse_req,
+    http::{
+        headers::parse_headers,
+        parse_req,
+    },
     maps::{
         BACKEND_CONNECTION_MAP,
         CLIENT_CONNECTION_MAP,
@@ -42,18 +44,7 @@ fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
         return SK_DROP;
     }
 
-    if parse_req(&ctx).is_err() {
-        return SK_DROP;
-    }
-
-    // tail call to router
-    unsafe {
-        JMP_TABLE.tail_call(&ctx, JMP_PROG_ROUTING);
-    }
-
-    debug!(ctx, "tail call to router failed");
-
-    SK_DROP
+    parse_req(&ctx)
 }
 
 #[stream_verdict]

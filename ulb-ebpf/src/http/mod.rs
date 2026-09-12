@@ -1,13 +1,18 @@
-use aya_ebpf::programs::SkBuffContext;
+use aya_ebpf::{
+    bindings::sk_action::SK_DROP,
+    programs::SkBuffContext,
+};
 
-mod headers;
+pub mod headers;
 mod request_line;
 
-use headers::*;
 use request_line::*;
+use ulb_common::JMP_PROG_HEADER_PARSER;
 
 use crate::{
     debug,
+    error,
+    maps::JMP_TABLE,
     utils::{
         b8,
         get_http_buf,
@@ -41,20 +46,23 @@ impl HttpParseError {
     }
 }
 
-pub fn parse_req(ctx: &SkBuffContext) -> Result<(), ()> {
-    let req = get_http_buf().ok_or(())?;
+pub fn parse_req(ctx: &SkBuffContext) -> u32 {
+    let req = match get_http_buf() {
+        Some(x) => x,
+        None => return SK_DROP,
+    };
 
     #[allow(unused_variables)]
     if let Err(err) = parse_request_line(ctx, req) {
-        debug!(&ctx, "failed to parse request line: {}", err.as_str());
-        return Err(());
+        debug!(&ctx, "[E:2] failed to parse request line: {}", err.as_str());
+        return SK_DROP;
     }
 
-    #[allow(unused_variables)]
-    if let Err(err) = parse_headers(ctx, req) {
-        debug!(&ctx, "failed to parse header: {}", err.as_str());
-        return Err(());
+    unsafe {
+        JMP_TABLE.tail_call(ctx, JMP_PROG_HEADER_PARSER);
     }
 
-    Ok(())
+    error!(ctx, "[E:2] tail call to header parser failed");
+
+    SK_DROP
 }

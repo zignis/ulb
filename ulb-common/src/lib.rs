@@ -14,11 +14,12 @@ use containers::*;
 use ir::*;
 use utils::*;
 
-// total programs for available for tail call
-pub const JMP_PROG_COUNT: u32 = 1;
+// total programs available for tail call
+pub const JMP_PROG_COUNT: u32 = 2;
 
 // prog idx for tail calls
-pub const JMP_PROG_ROUTING: u32 = 0;
+pub const JMP_PROG_ROUTER: u32 = 0;
+pub const JMP_PROG_HEADER_PARSER: u32 = 1;
 
 // -4 to keep loop iterations under verifier's 8192 jump limit
 pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024 - 4; // around 8kb for req line and headers
