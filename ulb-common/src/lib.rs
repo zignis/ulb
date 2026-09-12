@@ -11,6 +11,8 @@ pub mod utils;
 use core::ffi::CStr;
 
 use containers::*;
+use ir::*;
+use utils::*;
 
 // total programs for available for tail call
 pub const JMP_PROG_COUNT: u32 = 1;
