@@ -83,14 +83,13 @@ pub fn compile_vhosts(
             );
 
             for route_cfg in &vhost.routes {
-                let (path, match_type) = if let Some(prefix) = route_cfg.path.strip_suffix("*") {
-                    (prefix.to_string(), RouteMatchType::Prefix)
-                } else {
-                    (route_cfg.path.clone(), RouteMatchType::Exact)
+                let (path, match_type) = match route_cfg.path.strip_suffix("*") {
+                    Some(prefix) => (prefix, RouteMatchType::Prefix),
+                    None => (route_cfg.path.as_str(), RouteMatchType::Exact),
                 };
 
                 let mut route = RouteValue {
-                    path: BoundedStr::try_from(path.as_str()).map_err(|_| {
+                    path: BoundedStr::try_from(path).map_err(|_| {
                         anyhow!(
                             "resolved path `{path}` is too long ({}/{HTTP_URI_MAX_LEN})",
                             path.len()
