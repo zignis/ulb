@@ -42,7 +42,7 @@ use ulb_common::{
 };
 
 #[cfg(feature = "debug")]
-use crate::telemetry::kernel_log;
+use crate::telemetry::bpf_log_closure;
 
 #[allow(dead_code)]
 pub struct BpfState {
@@ -74,7 +74,7 @@ pub fn bootstrap_bpf(cgroup_path: &str) -> anyhow::Result<BpfState> {
                 loop {
                     match logger.readable_mut().await {
                         Ok(mut x) => {
-                            kernel_log(|| x.get_inner_mut().flush());
+                            bpf_log_closure(|| x.get_inner_mut().flush());
                             x.clear_ready();
                         }
                         Err(err) => {
