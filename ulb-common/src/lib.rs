@@ -139,7 +139,16 @@ impl HttpVersion {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HttpHeader {
     pub key: BoundedStr<HTTP_HDR_KEY_MAX_LEN>,
-    pub value: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
+    pub val: BoundedStr<HTTP_HDR_VAL_MAX_LEN>,
+}
+
+impl HttpHeader {
+    // resets the len of key and val
+    // does not zero out the buffer
+    pub fn reset(&mut self) {
+        self.key.len = 0;
+        self.val.len = 0;
+    }
 }
 
 #[repr(C)]
