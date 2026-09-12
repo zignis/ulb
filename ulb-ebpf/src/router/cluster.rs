@@ -14,7 +14,7 @@ use crate::{
 };
 
 const MAX_BACKEND_SELECT_ATTEMPTS: u32 = 8;
-const MAX_CONNECTION_SELECT_ATTEMPTS: u32 = 4;
+const MAX_CONNECTION_SELECT_ATTEMPTS: u64 = 4;
 
 #[inline(always)]
 fn claim_connection(
@@ -61,7 +61,7 @@ pub fn select_backend(
     client_cookie: SocketCookie,
 ) -> Result<SocketCookie, ()> {
     let cluster = CLUSTER_TABLE.get_ptr_mut(cluster_idx).ok_or(())?;
-    let len = unsafe { (*cluster).backends.len };
+    let len = unsafe { (*cluster).backends.len } as u32;
 
     debug!(ctx, "cluster {} has {} backends", cluster_idx, len);
 
@@ -78,10 +78,10 @@ pub fn select_backend(
     for i in 0..MAX_BACKEND_SELECT_ATTEMPTS {
         let idx = (start_idx + i) % len;
 
-        if let Some(backend) = unsafe { (*cluster).backends.data.get(idx as usize) } {
-            if let Some(cookie) = claim_connection(ctx, backend.pool_idx, client_cookie) {
-                return Ok(cookie);
-            }
+        if let Some(backend) = unsafe { (*cluster).backends.data.get(idx as usize) }
+            && let Some(cookie) = claim_connection(ctx, backend.pool_idx, client_cookie)
+        {
+            return Ok(cookie);
         }
     }
 
