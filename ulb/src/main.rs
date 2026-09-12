@@ -1,56 +1,17 @@
 #![cfg(target_os = "linux")]
 
-use std::{
-    net::SocketAddr,
-    num::NonZero,
-    thread::available_parallelism,
-};
-
-use anyhow::anyhow;
-use aya::{
-    maps::{
-        Array,
-        HashMap,
-        ProgramArray,
-        SockHash,
-    },
-    programs::{
-        CgroupAttachMode,
-        SkSkb,
-        SockOps,
-    },
-};
 use clap::Parser;
 use log::{
     Level,
     info,
     log_enabled,
 };
-use tokio::{
-    io::AsyncReadExt,
-    net::{
-        TcpListener,
-        TcpSocket,
-    },
-    signal,
-    task::JoinSet,
-};
+use tokio::signal;
 use tokio_util::sync::CancellationToken;
-use ulb_common::{
-    JMP_PROG_ROUTING,
-    SocketCookie,
-    ir::{
-        BackendConnectionPool,
-        Cluster,
-        LISTEN_BACKLOG_QUEUE_SIZE,
-        RouteValue,
-        VHostKey,
-        VHostValue,
-    },
-};
 
 use crate::{
     backend::BackendManager,
+    bpf_bootstrap::bootstrap_bpf,
     config::{
         adapters::{
             load_config,
@@ -58,241 +19,94 @@ use crate::{
         },
         compiler::compile,
     },
+    control_plane::ControlPlane,
 };
 
 mod backend;
+mod bpf_bootstrap;
 mod config;
+mod control_plane;
+mod telemetry;
 mod utils;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "./config.yaml")] // TODO: change default path
+    #[arg(short, long, default_value = "/etc/ulb/ulb.yaml")]
     config: String,
-}
-
-fn bind_port(addr: SocketAddr) -> anyhow::Result<TcpListener> {
-    let socket = if addr.is_ipv4() {
-        TcpSocket::new_v4()?
-    } else {
-        TcpSocket::new_v6()?
-    };
-
-    socket
-        .set_reuseport(true)
-        .map_err(|err| anyhow!("failed to set `reuseport` opt: {err}"))?;
-
-    socket.bind(addr)?;
-    Ok(socket.listen(LISTEN_BACKLOG_QUEUE_SIZE)?)
+    #[arg(long, default_value = "/sys/fs/cgroup")]
+    cgroup: String,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    env_logger::init();
+    telemetry::init();
 
     if !log_enabled!(Level::Info) {
         println!("RUST_LOG: info level logging is not enabled");
     }
 
-    println!("launching...");
+    println!(
+        "launching µlb v{}.{}",
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        env!("CARGO_PKG_VERSION_MINOR")
+    );
 
-    let mut ebpf = aya::Ebpf::load(aya::include_bytes_aligned!(concat!(
-        env!("OUT_DIR"),
-        "/ulb"
-    )))?;
+    let mut bpf = bootstrap_bpf(&args.cgroup)?;
 
-    #[cfg(feature = "debug")]
-    match aya_log::EbpfLogger::init(&mut ebpf) {
-        Err(e) => {
-            // can happen if there are no log statements in ebpf program
-            log::warn!("failed to initialize ebpf logger: {e}");
-        }
-        Ok(logger) => {
-            let mut logger =
-                tokio::io::unix::AsyncFd::with_interest(logger, tokio::io::Interest::READABLE)?;
-
-            tokio::task::spawn(async move {
-                loop {
-                    let mut guard = logger.readable_mut().await.unwrap();
-                    guard.get_inner_mut().flush();
-                    guard.clear_ready();
-                }
-            });
-        }
-    }
-
-    let connection_map: SockHash<_, SocketCookie> = SockHash::try_from(
-        ebpf.take_map("CLIENT_CONNECTION_MAP")
-            .ok_or_else(|| anyhow!("missing `CLIENT_CONNECTION_MAP`"))?,
-    )?;
-
-    let mut backend_map: SockHash<_, SocketCookie> = SockHash::try_from(
-        ebpf.take_map("BACKEND_CONNECTION_MAP")
-            .ok_or_else(|| anyhow!("missing `BACKEND_CONNECTION_MAP`"))?,
-    )?;
-
-    let parser: &mut SkSkb = ebpf
-        .program_mut("stream_parser")
-        .ok_or_else(|| anyhow!("missing `stream_parser` prog"))?
-        .try_into()?;
-    parser.load()?;
-    parser.attach(connection_map.fd())?;
-
-    let client_verdict: &mut SkSkb = ebpf
-        .program_mut("client_stream_verdict")
-        .ok_or_else(|| anyhow!("missing `client_stream_verdict` prog"))?
-        .try_into()?;
-    client_verdict.load()?;
-    client_verdict.attach(connection_map.fd())?;
-
-    let backend_verdict: &mut SkSkb = ebpf
-        .program_mut("backend_stream_verdict")
-        .ok_or_else(|| anyhow!("missing `backend_stream_verdict` prog"))?
-        .try_into()?;
-    backend_verdict.load()?;
-    backend_verdict.attach(backend_map.fd())?;
-
-    // jump table for tail calls
-    let mut jmp_table: ProgramArray<_> = ProgramArray::try_from(
-        ebpf.take_map("JMP_TABLE")
-            .ok_or_else(|| anyhow!("missing `JMP_TABLE`"))?,
-    )?;
-
-    let router: &mut SkSkb = ebpf
-        .program_mut("router")
-        .ok_or_else(|| anyhow!("missing `router` prog"))?
-        .try_into()?;
-    router.load()?;
-
-    jmp_table.set(
-        JMP_PROG_ROUTING,
-        router
-            .fd()
-            .map_err(|_| anyhow!("failed to set `JMP_PROG_ROUTING`"))?,
-        0,
-    )?;
-
-    // TODO: make cgroup configurable
-    let cgroup = std::fs::File::open("/sys/fs/cgroup")?;
-    let sock_ops: &mut SockOps = ebpf
-        .program_mut("sock_ops")
-        .ok_or_else(|| anyhow!("missing `sock_ops` prog"))?
-        .try_into()?;
-    sock_ops.load()?;
-    sock_ops.attach(cgroup, CgroupAttachMode::Single)?;
-
-    // configuration
     let cfg = load_config::<NativeAdapter, _>(&args.config)?;
-
-    let mut listener_ports: Array<_, u8> = Array::try_from(
-        ebpf.take_map("LISTENER_PORTS")
-            .ok_or_else(|| anyhow!("missing `LISTENER_PORTS`"))?,
-    )?;
+    info!("config loaded");
 
     for listener_cfg in &cfg.listeners {
-        listener_ports.set(listener_cfg.addr.port() as u32, 1, 0)?;
+        bpf.listener_ports
+            .set(u32::from(listener_cfg.addr.port()), 1, 0)?;
     }
 
     let shutdown_token = CancellationToken::new();
-
-    let mut backend_conn_pool_table: Array<_, BackendConnectionPool> = Array::try_from(
-        ebpf.take_map("BACKEND_CONNECTION_POOL_TABLE")
-            .ok_or_else(|| anyhow!("missing `BACKEND_CONNECTION_POOL_TABLE`"))?,
-    )?;
-
     let mut backend_manager = BackendManager::new();
+
     let cluster_conn_pool_map = backend_manager
-        .initialize_clusters(&cfg, &mut backend_map, &mut backend_conn_pool_table)
+        .initialize_clusters(
+            &cfg,
+            &mut bpf.backend_connection_map,
+            &mut bpf.backend_connection_pool_table,
+        )
         .await?;
+
     let ir = compile(&cfg, cluster_conn_pool_map)?;
 
-    let mut vhost_map: HashMap<_, VHostKey, VHostValue> = HashMap::try_from(
-        ebpf.take_map("VHOST_MAP")
-            .ok_or_else(|| anyhow!("missing `VHOST_MAP`"))?,
-    )?;
-
     for (key, val) in ir.vhost_map {
-        vhost_map.insert(key, val, 0)?;
+        bpf.vhost_map.insert(key, val, 0)?;
     }
-
-    let mut route_table: Array<_, RouteValue> = Array::try_from(
-        ebpf.take_map("ROUTE_TABLE")
-            .ok_or_else(|| anyhow!("missing `ROUTE_TABLE`"))?,
-    )?;
 
     for (i, route) in ir.route_table.into_iter().enumerate() {
-        route_table.set(i as u32, route, 0)?;
+        bpf.route_table.set(u32::try_from(i)?, route, 0)?;
     }
-
-    let mut cluster_table: Array<_, Cluster> = Array::try_from(
-        ebpf.take_map("CLUSTER_TABLE")
-            .ok_or_else(|| anyhow!("missing `CLUSTER_TABLE`"))?,
-    )?;
 
     for (i, cluster) in ir.cluster_table.into_iter().enumerate() {
-        cluster_table.set(i as u32, cluster, 0)?;
+        bpf.cluster_table.set(u32::try_from(i)?, cluster, 0)?;
     }
 
-    info!("config loaded");
-
-    // TODO: change default value
-    let num_cores = available_parallelism().map(NonZero::get).unwrap_or(4);
-    let mut tasks = JoinSet::new();
-
-    info!("starting {} workers per listener", num_cores);
-
-    for listener_cfg in &cfg.listeners {
-        let addr = listener_cfg.addr;
-
-        for _ in 0..num_cores {
-            let listener = bind_port(addr)?;
-            let shutdown_token = shutdown_token.clone();
-
-            tasks.spawn(async move {
-                loop {
-                    tokio::select! {
-                        Ok((mut stream, _)) = listener.accept() => {
-                            let _ = stream.set_nodelay(true);
-                            let task_shutdown = shutdown_token.clone();
-
-
-                            // EOF detection task
-                            tokio::spawn(async move {
-                                let mut buf = [0u8; 1];
-
-                                loop {
-                                    tokio::select! {
-                                        _ = task_shutdown.cancelled() => {
-                                            break;
-                                        }
-
-                                        res = stream.read(&mut buf) => {
-                                            if let Ok(0) | Err(_) = res {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            });
-                        }
-
-                        _ = shutdown_token.cancelled() => {
-                            break;
-                        }
-                    }
-                }
-            });
-        }
-
-        info!("listening on http://{addr}");
+    for (i, rule) in ir.header_rule_table.into_iter().enumerate() {
+        bpf.header_rule_table.set(u32::try_from(i)?, rule, 0)?;
     }
+
+    for (key, val) in ir.header_key_map {
+        bpf.header_key_map.insert(key, val, 0)?;
+    }
+
+    let mut control_plane = ControlPlane::new(shutdown_token.clone());
+    control_plane.start(&cfg)?;
 
     loop {
         tokio::select! {
-            // backend reconnect events
             Some(event) = backend_manager.next_event() => {
-                backend_manager.handle_event(event, &mut backend_map, &mut backend_conn_pool_table).await;
+                backend_manager.handle_event(
+                    event,
+                    &mut bpf.backend_connection_map,
+                    &mut bpf.backend_connection_pool_table
+                );
             }
 
             _ = signal::ctrl_c() => {
@@ -300,8 +114,7 @@ async fn main() -> anyhow::Result<()> {
 
                 shutdown_token.cancel();
                 backend_manager.shutdown().await;
-
-                while tasks.join_next().await.is_some() {}
+                control_plane.shutdown().await;
 
                 break;
             }
