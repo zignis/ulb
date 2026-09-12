@@ -55,7 +55,7 @@ pub fn compile_vhosts(
 
             vhost_map.insert(
                 VHostKey {
-                    port: port as u32,
+                    port: port as u64,
                     host: BoundedStr::try_from(vhost.host.as_str()).map_err(|_| {
                         anyhow!(
                             "host `{}` is too long ({}/{HTTP_HDR_VAL_MAX_LEN})",
