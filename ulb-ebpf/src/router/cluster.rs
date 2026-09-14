@@ -4,10 +4,7 @@ use aya_ebpf::{
     programs::SkBuffContext,
 };
 use ulb_common::{
-    ir::{
-        MAX_BACKENDS_PER_CLUSTER,
-        cluster::LoadBalancingPolicy,
-    },
+    ir::cluster::LoadBalancingPolicy,
     session::{
         SessionTarget,
         SocketCookie,
@@ -21,6 +18,7 @@ use crate::{
         CLUSTER_TABLE,
         SESSION_MAP,
     },
+    utils::atomic_add_u32,
     warn,
 };
 
@@ -62,8 +60,9 @@ fn claim_connection(
             )
             .is_ok()
         {
-
-            // TODO: increment active_connections
+            unsafe {
+                atomic_add_u32(&raw mut (*pool).active_connections, 1);
+            }
 
             debug!(
                 ctx,

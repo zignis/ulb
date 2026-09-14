@@ -23,10 +23,12 @@ use crate::{
     debug,
     error,
     maps::{
+        BACKEND_CONNECTION_POOL_TABLE,
         CLIENT_CONNECTION_MAP,
         LISTENER_PORTS,
         SESSION_MAP,
     },
+    utils::atomic_add_i32,
 };
 
 #[sock_ops]
@@ -36,13 +38,21 @@ fn ulb_sock_ops(ctx: SockOpsContext) -> u32 {
         BPF_SOCK_OPS_STATE_CB if matches!(ctx.arg(1), BPF_TCP_CLOSE | BPF_TCP_TIME_WAIT) => {
             let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut c_void) } as SocketCookie;
 
-            if let Some(other_cookie) = unsafe { SESSION_MAP.get(cookie) } {
+            if let Some(target) = unsafe { SESSION_MAP.get(cookie) } {
+                if let Some(pool) =
+                    BACKEND_CONNECTION_POOL_TABLE.get_ptr_mut(target.pool_idx as u32)
+                {
+                    unsafe {
+                        atomic_add_i32((&raw mut (*pool).active_connections) as *mut i32, -1);
+                    }
+                }
+
                 let _ = SESSION_MAP.remove(cookie);
-                let _ = SESSION_MAP.remove(other_cookie);
+                let _ = SESSION_MAP.remove(target.cookie);
 
                 debug!(
                     &ctx,
-                    "cleared session (CK:{}, CK:{})", cookie, *other_cookie
+                    "cleared session (CK:{}, CK:{})", cookie, target.cookie
                 );
             }
         }
