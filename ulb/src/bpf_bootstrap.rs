@@ -27,10 +27,9 @@ use tokio::{
     task,
 };
 use ulb_common::{
-    HTTP_HDR_KEY_MAX_LEN,
     JMP_PROG_HEADER_PARSER,
     JMP_PROG_ROUTER,
-    SocketCookie,
+    http::HTTP_HDR_KEY_MAX_LEN,
     ir::{
         BackendConnectionPool,
         Cluster,
@@ -39,6 +38,7 @@ use ulb_common::{
         VHostKey,
         VHostValue,
     },
+    session::SocketCookie,
 };
 
 #[cfg(feature = "debug")]

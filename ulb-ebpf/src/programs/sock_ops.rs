@@ -17,7 +17,7 @@ use aya_ebpf::{
     macros::sock_ops,
     programs::SockOpsContext,
 };
-use ulb_common::SocketCookie;
+use ulb_common::session::SocketCookie;
 
 use crate::{
     debug,

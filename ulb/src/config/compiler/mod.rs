@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use ulb_common::{
-    HTTP_HDR_KEY_MAX_LEN,
+    http::HTTP_HDR_KEY_MAX_LEN,
     ir::{
         Cluster,
         HeaderRule,

@@ -4,10 +4,12 @@ use core::ffi::{
 };
 
 use ulb_common::{
-    HTTP_HDR_VAL_MAX_LEN,
-    HttpHeader,
-    HttpRequest,
     containers::BoundedStr,
+    http::{
+        HTTP_HDR_VAL_MAX_LEN,
+        HttpHeader,
+        HttpRequest,
+    },
     ir::{
         HDR_RULE_SENTINEL,
         HeaderRule,

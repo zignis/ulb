@@ -5,11 +5,13 @@ use anyhow::{
     bail,
 };
 use ulb_common::{
-    HTTP_HDR_KEY_MAX_LEN,
-    HTTP_HDR_VAL_MAX_LEN,
-    HTTP_URI_MAX_LEN,
-    HttpMethod,
     containers::BoundedStr,
+    http::{
+        HTTP_HDR_KEY_MAX_LEN,
+        HTTP_HDR_VAL_MAX_LEN,
+        HTTP_URI_MAX_LEN,
+        HttpMethod,
+    },
     ir::{
         HDR_RULE_SENTINEL,
         HeaderRule,

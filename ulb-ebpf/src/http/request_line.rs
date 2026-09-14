@@ -3,7 +3,7 @@ use aya_ebpf::{
     helpers::bpf_skb_load_bytes,
     programs::SkBuffContext,
 };
-use ulb_common::{
+use ulb_common::http::{
     HTTP_URI_MAX_LEN,
     HttpMethod,
     HttpRequest,

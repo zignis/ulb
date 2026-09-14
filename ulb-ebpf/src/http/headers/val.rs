@@ -3,7 +3,7 @@ use core::ffi::{
     c_void,
 };
 
-use ulb_common::HTTP_REQ_MAX_SCRATCH_SIZE;
+use ulb_common::http::HTTP_REQ_MAX_SCRATCH_SIZE;
 
 use crate::{
     BPF_LOOP_NEXT,

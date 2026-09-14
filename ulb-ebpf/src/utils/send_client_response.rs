@@ -9,7 +9,7 @@ use aya_ebpf::{
     },
     programs::SkBuffContext,
 };
-use ulb_common::SocketCookie;
+use ulb_common::session::SocketCookie;
 
 use crate::{
     BPF_SKB_EGRESS,

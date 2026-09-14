@@ -1,4 +1,4 @@
-use ulb_common::HttpRequest;
+use ulb_common::http::HttpRequest;
 
 use crate::maps::HTTP_REQ_BUF;
 

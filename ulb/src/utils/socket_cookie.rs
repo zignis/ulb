@@ -11,7 +11,7 @@ use libc::{
     getsockopt,
     socklen_t,
 };
-use ulb_common::SocketCookie;
+use ulb_common::session::SocketCookie;
 
 #[cfg(target_os = "linux")]
 pub fn get_socket_cookie(fd: RawFd) -> anyhow::Result<SocketCookie> {

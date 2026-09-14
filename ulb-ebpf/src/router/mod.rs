@@ -100,7 +100,7 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
                     &ctx,
                     "[E:2] failed to insert client->backend session ({})", eno
                 );
-                
+
                 let _ = SESSION_MAP.remove(backend_cookie); // remove mapping inserted by select_backend
                 return send_client_response(ctx, HTTP_500_INTERNAL_SERVER_ERROR);
             }

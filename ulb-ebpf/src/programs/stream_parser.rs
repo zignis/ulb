@@ -7,7 +7,7 @@ use aya_ebpf::{
     macros::stream_parser,
     programs::SkBuffContext,
 };
-use ulb_common::HTTP_REQ_MAX_SCRATCH_SIZE;
+use ulb_common::http::HTTP_REQ_MAX_SCRATCH_SIZE;
 
 use crate::{
     maps::SESSION_MAP,

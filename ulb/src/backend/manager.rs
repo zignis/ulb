@@ -34,8 +34,8 @@ use tokio::{
     task::JoinSet,
 };
 use ulb_common::{
-    SocketCookie,
     ir::BackendConnectionPool,
+    session::SocketCookie,
 };
 
 use crate::{

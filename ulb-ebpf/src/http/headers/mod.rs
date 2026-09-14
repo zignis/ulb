@@ -13,14 +13,16 @@ use aya_ebpf::{
     programs::SkBuffContext,
 };
 use ulb_common::{
-    HTTP_HDR_KEY_MAX_LEN,
-    HTTP_HDR_VAL_MAX_LEN,
-    HTTP_MAX_HEADERS,
-    HTTP_REQ_MAX_SCRATCH_SIZE,
-    HttpHeader,
-    HttpRequest,
-    HttpVersion,
     JMP_PROG_ROUTER,
+    http::{
+        HTTP_HDR_KEY_MAX_LEN,
+        HTTP_HDR_VAL_MAX_LEN,
+        HTTP_MAX_HEADERS,
+        HTTP_REQ_MAX_SCRATCH_SIZE,
+        HttpHeader,
+        HttpRequest,
+        HttpVersion,
+    },
     ir::{
         HDR_RULE_SENTINEL,
         MAX_HEADER_RULES,
