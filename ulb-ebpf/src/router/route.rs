@@ -5,9 +5,11 @@ use core::ffi::{
 
 use aya_ebpf::helpers::bpf_loop;
 use ulb_common::{
-    HTTP_URI_MAX_LEN,
-    HttpRequest,
     containers::BoundedStr,
+    http::{
+        HTTP_URI_MAX_LEN,
+        HttpRequest,
+    },
     ir::{
         MAX_ROUTES,
         MAX_ROUTES_PER_VHOST,

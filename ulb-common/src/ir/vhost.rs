@@ -1,6 +1,6 @@
 use crate::{
-    HTTP_HDR_VAL_MAX_LEN,
     containers::BoundedStr,
+    http::HTTP_HDR_VAL_MAX_LEN,
 };
 
 #[repr(C)]

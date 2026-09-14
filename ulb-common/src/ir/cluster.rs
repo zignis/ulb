@@ -3,8 +3,8 @@ use super::{
     MAX_BACKENDS_PER_CLUSTER,
 };
 use crate::{
-    SocketCookie,
     containers::BoundedVec,
+    session::SocketCookie,
 };
 
 #[repr(C)]

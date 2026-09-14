@@ -5,8 +5,8 @@ use serde::{
 };
 
 use crate::{
-    HTTP_URI_MAX_LEN,
     containers::BoundedStr,
+    http::HTTP_URI_MAX_LEN,
 };
 
 #[repr(C)]

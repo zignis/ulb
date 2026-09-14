@@ -9,10 +9,11 @@ use aya_ebpf::{
     },
 };
 use ulb_common::{
-    HTTP_HDR_KEY_MAX_LEN,
-    HttpRequest,
     JMP_PROG_COUNT,
-    SocketCookie,
+    http::{
+        HTTP_HDR_KEY_MAX_LEN,
+        HttpRequest,
+    },
     ir::{
         BackendConnectionPool,
         Cluster,

@@ -13,7 +13,7 @@ use core::{
     slice,
 };
 
-use crate::make_word_ascii_lowercase;
+use crate::utils::make_word_ascii_lowercase;
 
 macro_rules! words {
     ($sz:expr) => {

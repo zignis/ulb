@@ -1,5 +1,5 @@
 use ulb_common::{
-    HttpRequest,
+    http::HttpRequest,
     ir::{
         VHostKey,
         VHostValue,
