@@ -81,7 +81,7 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
             let client_cookie =
                 unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) } as SocketCookie;
 
-            let Ok((mut backend_cookie, pool_idx)) =
+            let Some((mut backend_cookie, pool_idx)) =
                 select_backend(ctx, cluster_idx, client_cookie)
             else {
                 return send_client_response(ctx, HTTP_503_SERVICE_UNAVAILABLE);
