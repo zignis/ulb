@@ -1,15 +1,15 @@
 use aya_ebpf::{
-    bindings::sk_action::{
-        SK_DROP,
-        SK_PASS,
-    },
+    bindings::sk_action::SK_DROP,
     cty::c_void,
     helpers::bpf_get_socket_cookie,
     programs::SkBuffContext,
 };
 use ulb_common::{
-    SocketCookie,
     ir::ROUTE_ACTION_DROP,
+    session::{
+        SessionTarget,
+        SocketCookie,
+    },
 };
 
 use crate::{
@@ -22,10 +22,21 @@ use crate::{
     },
     router::{
         cluster::select_backend,
-        route::match_route,
+        route::{
+            RouteError,
+            match_route,
+        },
         vhost::resolve_vhost,
     },
-    utils::get_http_buf,
+    utils::{
+        HTTP_403_FORBIDDEN,
+        HTTP_404_NOT_FOUND,
+        HTTP_405_METHOD_NOT_ALLOWED,
+        HTTP_500_INTERNAL_SERVER_ERROR,
+        HTTP_503_SERVICE_UNAVAILABLE,
+        get_http_buf,
+        send_client_response,
+    },
 };
 
 mod cluster;
@@ -42,22 +53,26 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
         Some(x) => x,
         None => {
             debug!(&ctx, "[D:2] no vhost matched");
-            return SK_PASS;
+            return send_client_response(ctx, HTTP_404_NOT_FOUND);
         }
     };
 
     let route = match match_route(req, vhost) {
-        Some(x) => x,
-        None => {
+        Ok(x) => x,
+        Err(RouteError::NotFound) => {
             debug!(&ctx, "[D:2] no route matched");
-            return SK_PASS;
+            return send_client_response(ctx, HTTP_404_NOT_FOUND);
+        }
+        Err(RouteError::MethodNotAllowed) => {
+            debug!(&ctx, "[D:2] method not allowed");
+            return send_client_response(ctx, HTTP_405_METHOD_NOT_ALLOWED);
         }
     };
 
     match route.action {
         ROUTE_ACTION_DROP => {
             debug!(&ctx, "[D:2] dropped due to drop action");
-            SK_DROP
+            send_client_response(ctx, HTTP_403_FORBIDDEN)
         }
 
         cluster_idx => {
@@ -66,18 +81,28 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
             let client_cookie =
                 unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) } as SocketCookie;
 
-            let Ok(mut backend_cookie) = select_backend(ctx, cluster_idx, client_cookie) else {
-                return SK_DROP;
+            let Ok((mut backend_cookie, pool_idx)) =
+                select_backend(ctx, cluster_idx, client_cookie)
+            else {
+                return send_client_response(ctx, HTTP_503_SERVICE_UNAVAILABLE);
             };
 
             #[allow(unused_variables)]
-            if let Err(eno) = SESSION_MAP.insert(client_cookie, backend_cookie, 0) {
+            if let Err(eno) = SESSION_MAP.insert(
+                client_cookie,
+                SessionTarget {
+                    cookie: backend_cookie,
+                    pool_idx: pool_idx as u64,
+                },
+                0,
+            ) {
                 error!(
                     &ctx,
                     "[E:2] failed to insert client->backend session ({})", eno
                 );
+                
                 let _ = SESSION_MAP.remove(backend_cookie); // remove mapping inserted by select_backend
-                return SK_DROP;
+                return send_client_response(ctx, HTTP_500_INTERNAL_SERVER_ERROR);
             }
 
             BACKEND_CONNECTION_MAP.redirect_skb(ctx, &mut backend_cookie, BPF_SKB_EGRESS) as u32
