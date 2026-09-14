@@ -1,5 +1,6 @@
 use aya_ebpf::{
     bindings::BPF_NOEXIST,
+    helpers::bpf_get_prandom_u32,
     programs::SkBuffContext,
 };
 use ulb_common::{
@@ -90,12 +91,22 @@ pub fn select_backend(
         return None;
     }
 
-    // TODO: make this atomic
-    let counter = unsafe { &mut (*cluster).rr_counter };
-    let start_idx = *counter % len;
-    *counter = counter.wrapping_add(1);
+    let start_idx = match unsafe { (*cluster).policy } {
+        LoadBalancingPolicy::Random => unsafe { bpf_get_prandom_u32() % len },
 
-    // search for idle backend
+        LoadBalancingPolicy::IpHash => ctx.skb.remote_ipv4() % len,
+
+        LoadBalancingPolicy::RoundRobin => {
+            // TODO: impl
+            0
+        }
+
+        LoadBalancingPolicy::LeastLoaded => {
+            // TODO: impl
+            0
+        }
+    };
+
     for i in 0..MAX_BACKEND_SELECT_ATTEMPTS {
         let idx = (start_idx + i) % len;
 
