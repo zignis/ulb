@@ -74,7 +74,6 @@ struct ParseHdrCtx<'a> {
     req: &'a mut HttpRequest,
     hdr: &'a mut HttpHeader,
     err: bool,
-    overflow: bool,
 }
 
 pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
@@ -92,7 +91,6 @@ pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
         hdr: &mut hdr,
         req,
         err: false,
-        overflow: false,
     };
 
     let loop_ret = unsafe {
@@ -108,7 +106,7 @@ pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
         return SK_DROP;
     }
 
-    if hdr_ctx.overflow {
+    if hdr_ctx.req._offset as usize >= HTTP_REQ_MAX_SCRATCH_SIZE {
         debug!(ctx, "[E:2] header overflow");
         return send_client_response(ctx, HTTP_431_REQUEST_HEADER_FIELDS_TOO_LARGE);
     }
@@ -143,7 +141,6 @@ extern "C" fn parse_hdr(_idx: u32, ctx: *mut c_void) -> c_long {
     ctx.hdr.reset();
 
     if offset >= HTTP_REQ_MAX_SCRATCH_SIZE {
-        ctx.overflow = true;
         return BPF_LOOP_STOP;
     }
 
