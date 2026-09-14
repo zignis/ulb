@@ -25,10 +25,17 @@ use crate::{
     maps::ROUTE_TABLE,
 };
 
+#[derive(Debug)]
+pub enum RouteError {
+    NotFound,
+    MethodNotAllowed, // TODO: send a list of allowed methods
+}
+
 struct RouteLoopCtx<'a> {
     req: &'a HttpRequest,
     vhost: &'a VHostValue,
     matched_route: Option<&'a RouteValue>,
+    method_denied: bool,
 }
 
 // TODO: can this be inlined?
@@ -57,21 +64,21 @@ extern "C" fn route_loop_cb(idx: u32, ctx_ptr: *mut c_void) -> c_long {
         None => return BPF_LOOP_STOP,
     };
 
-    if !ctx.req.method.match_mask(route.method_mask) {
-        return BPF_LOOP_NEXT;
-    }
-
-    // & is used to derive the bounds for verifier
-    let route_idx = route_idx & (MAX_ROUTES - 1);
-
-    // cmp hdr mask before matching path since its faster
-    if ctx.req.satisfied_rule_masks[route_idx as usize] != route.required_headers_mask {
-        return BPF_LOOP_NEXT;
-    }
-
     // TODO: longest prefix match; make compiler reorder longer path prefixes
     // earlier in the route table
     if match_path(&ctx.req.uri, &route.path, route.match_type) {
+        if !ctx.req.method.match_mask(route.method_mask) {
+            ctx.method_denied = true;
+            return BPF_LOOP_NEXT;
+        }
+
+        // & is used to derive the bounds for verifier
+        let route_idx = route_idx & (MAX_ROUTES - 1);
+
+        if ctx.req.satisfied_rule_masks[route_idx as usize] != route.required_headers_mask {
+            return BPF_LOOP_NEXT;
+        }
+
         ctx.matched_route = Some(route);
         return BPF_LOOP_STOP;
     }
@@ -80,11 +87,15 @@ extern "C" fn route_loop_cb(idx: u32, ctx_ptr: *mut c_void) -> c_long {
 }
 
 #[inline(always)]
-pub fn match_route<'a>(req: &'a HttpRequest, vhost: &'a VHostValue) -> Option<&'a RouteValue> {
+pub fn match_route<'a>(
+    req: &'a HttpRequest,
+    vhost: &'a VHostValue,
+) -> Result<&'a RouteValue, RouteError> {
     let mut ctx = RouteLoopCtx {
         req,
         vhost,
         matched_route: None,
+        method_denied: false,
     };
 
     unsafe {
@@ -96,5 +107,9 @@ pub fn match_route<'a>(req: &'a HttpRequest, vhost: &'a VHostValue) -> Option<&'
         );
     }
 
-    ctx.matched_route
+    match ctx.matched_route {
+        Some(x) => Ok(x),
+        None if ctx.method_denied => Err(RouteError::MethodNotAllowed),
+        None => Err(RouteError::NotFound),
+    }
 }
