@@ -31,8 +31,9 @@ fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
     debug!(ctx, "[D:1] client connection arrived ({}B)", ctx.len());
 
     // fast-path
-    if let Some(mut backend) = unsafe { SESSION_MAP.get(cookie) }.copied() {
-        return BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut backend, BPF_SKB_EGRESS) as u32;
+    if let Some(backend) = unsafe { SESSION_MAP.get(cookie) } {
+        let mut cookie = backend.cookie;
+        return BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut cookie, BPF_SKB_EGRESS) as u32;
     }
 
     if unsafe { bpf_skb_pull_data(ctx.skb.skb, 0) } < 0 {
@@ -49,8 +50,9 @@ fn ulb_backend_stream_verdict(ctx: SkBuffContext) -> u32 {
     debug!(ctx, "[D:4] response from backend ({}B)", ctx.len());
 
     // fast-path
-    if let Some(mut client) = unsafe { SESSION_MAP.get(cookie) }.copied() {
-        return CLIENT_CONNECTION_MAP.redirect_skb(&ctx, &mut client, BPF_SKB_EGRESS) as u32;
+    if let Some(client) = unsafe { SESSION_MAP.get(cookie) } {
+        let mut cookie = client.cookie;
+        return CLIENT_CONNECTION_MAP.redirect_skb(&ctx, &mut cookie, BPF_SKB_EGRESS) as u32;
     }
 
     SK_DROP
