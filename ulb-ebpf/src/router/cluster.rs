@@ -97,7 +97,11 @@ pub fn select_backend(
 
         LoadBalancingPolicy::RoundRobin => {
             // TODO: impl
-            0
+
+            let counter = unsafe { &mut (*cluster).rr_counter };
+            let start_idx = *counter % len;
+            *counter = counter.wrapping_add(1);
+            start_idx
         }
 
         LoadBalancingPolicy::LeastLoaded => {
@@ -106,6 +110,7 @@ pub fn select_backend(
         }
     };
 
+    // search for idle backends
     for i in 0..MAX_BACKEND_SELECT_ATTEMPTS {
         let idx = (start_idx + i) % len;
 
