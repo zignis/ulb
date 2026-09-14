@@ -31,6 +31,10 @@ use ulb_common::{
         VHostKey,
         VHostValue,
     },
+    session::{
+        SessionTarget,
+        SocketCookie,
+    },
 };
 
 #[map]
@@ -53,7 +57,7 @@ pub static CLIENT_CONNECTION_MAP: SockHash<SocketCookie> =
     SockHash::with_max_entries(MAX_CLIENT_CONNECTIONS, 0);
 
 #[map]
-pub static SESSION_MAP: HashMap<SocketCookie, SocketCookie> =
+pub static SESSION_MAP: HashMap<SocketCookie, SessionTarget> =
     HashMap::with_max_entries(MAX_SESSIONS, 0);
 
 #[map]
