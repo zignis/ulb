@@ -15,9 +15,9 @@ use ulb_common::ir::{
 
 pub type BackendConnectionPoolIdx = u32;
 
-// <cluster name, list of indices into BACKEND_CONNECTION_POOL_TABLE for each
+// <cluster name, vec<(idx into BACKEND_CONNECTION_POOL_TABLE, weight)> for each
 // backend under this cluster>
-pub type ClusterConnectionPoolMap = HashMap<String, Vec<BackendConnectionPoolIdx>>;
+pub type ClusterConnectionPoolMap = HashMap<String, Vec<(BackendConnectionPoolIdx, u32)>>;
 
 // <cluster name, idx in CLUSTER_TABLE>
 pub type ClusterIdxMap = HashMap<String, u32>;
