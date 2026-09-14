@@ -5,7 +5,7 @@ pub type SocketCookie = u64;
 pub struct SessionTarget {
     // 8B align
     pub cookie: SocketCookie,
-    pub pool_idx: u64,
+    pub pool_idx: u64, // idx into BACKEND_CONNECTION_POOL_TABLE
 }
 
 #[cfg(feature = "user")]
