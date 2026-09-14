@@ -14,8 +14,13 @@ use crate::{
     error,
     maps::JMP_TABLE,
     utils::{
+        HTTP_414_URI_TOO_LONG,
+        HTTP_500_INTERNAL_SERVER_ERROR,
+        HTTP_501_NOT_IMPLEMENTED,
+        HTTP_505_HTTP_VERSION_NOT_SUPPORTED,
         b8,
         get_http_buf,
+        send_client_response,
     },
 };
 
@@ -44,6 +49,15 @@ impl HttpParseError {
             Self::Internal => "internal error",
         }
     }
+
+    fn http_response(&self) -> &[u8] {
+        match self {
+            Self::InvalidMethod => HTTP_501_NOT_IMPLEMENTED,
+            Self::InvalidUri => HTTP_414_URI_TOO_LONG,
+            Self::InvalidVersion => HTTP_505_HTTP_VERSION_NOT_SUPPORTED,
+            Self::Internal => HTTP_500_INTERNAL_SERVER_ERROR,
+        }
+    }
 }
 
 pub fn parse_req(ctx: &SkBuffContext) -> u32 {
@@ -55,7 +69,7 @@ pub fn parse_req(ctx: &SkBuffContext) -> u32 {
     #[allow(unused_variables)]
     if let Err(err) = parse_request_line(ctx, req) {
         debug!(&ctx, "[E:2] failed to parse request line: {}", err.as_str());
-        return SK_DROP;
+        return send_client_response(ctx, err.http_response());
     }
 
     unsafe {
