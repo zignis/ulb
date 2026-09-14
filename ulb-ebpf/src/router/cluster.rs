@@ -2,7 +2,16 @@ use aya_ebpf::{
     bindings::BPF_NOEXIST,
     programs::SkBuffContext,
 };
-use ulb_common::SocketCookie;
+use ulb_common::{
+    ir::{
+        MAX_BACKENDS_PER_CLUSTER,
+        cluster::LoadBalancingPolicy,
+    },
+    session::{
+        SessionTarget,
+        SocketCookie,
+    },
+};
 
 use crate::{
     debug,
@@ -15,7 +24,7 @@ use crate::{
 };
 
 const MAX_BACKEND_SELECT_ATTEMPTS: u32 = 8;
-const MAX_CONNECTION_SELECT_ATTEMPTS: u64 = 4;
+const MAX_CONNECTION_SELECT_ATTEMPTS: u32 = 4;
 
 #[inline(always)]
 fn claim_connection(
@@ -24,13 +33,14 @@ fn claim_connection(
     client_cookie: SocketCookie,
 ) -> Option<SocketCookie> {
     let pool = BACKEND_CONNECTION_POOL_TABLE.get_ptr_mut(pool_idx)?;
-    let pool_len = unsafe { (*pool).connections.len };
+    let pool_len = unsafe { (*pool).connections.len } as u32;
 
     if pool_len == 0 {
         return None;
     }
 
-    // TODO: make this atomic
+    // intentionally avoid atomic operation for this counter (eventual consistency
+    // is maintained)
     let counter = unsafe { &mut (*pool).rr_counter };
     let start_idx = *counter % pool_len;
     *counter = counter.wrapping_add(1);
@@ -43,15 +53,22 @@ fn claim_connection(
         if SESSION_MAP
             .insert(
                 cookie,
-                client_cookie,
+                SessionTarget {
+                    cookie: client_cookie,
+                    pool_idx: pool_idx as u64,
+                },
                 BPF_NOEXIST as u64, // atomically claim the backend socket for this client
             )
             .is_ok()
         {
+
+            // TODO: increment active_connections
+
             debug!(
                 ctx,
                 "[D:3] claimed backend (CK:{}) from pool {}", *cookie, pool_idx
             );
+
             return Some(*cookie);
         }
     }
@@ -63,7 +80,7 @@ pub fn select_backend(
     ctx: &SkBuffContext,
     cluster_idx: u32,
     client_cookie: SocketCookie,
-) -> Result<SocketCookie, ()> {
+) -> Result<(SocketCookie, u32), ()> {
     let cluster = CLUSTER_TABLE.get_ptr_mut(cluster_idx).ok_or(())?;
     let len = unsafe { (*cluster).backends.len } as u32;
 
@@ -85,7 +102,7 @@ pub fn select_backend(
         if let Some(backend) = unsafe { (*cluster).backends.data.get(idx as usize) }
             && let Some(cookie) = claim_connection(ctx, backend.pool_idx, client_cookie)
         {
-            return Ok(cookie);
+            return Ok((cookie, backend.pool_idx));
         }
     }
 
