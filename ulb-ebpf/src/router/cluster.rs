@@ -80,14 +80,14 @@ pub fn select_backend(
     ctx: &SkBuffContext,
     cluster_idx: u32,
     client_cookie: SocketCookie,
-) -> Result<(SocketCookie, u32), ()> {
-    let cluster = CLUSTER_TABLE.get_ptr_mut(cluster_idx).ok_or(())?;
+) -> Option<(SocketCookie, u32)> {
+    let cluster = CLUSTER_TABLE.get_ptr_mut(cluster_idx)?;
     let len = unsafe { (*cluster).backends.len } as u32;
 
     debug!(ctx, "[D:3] cluster {} has {} backends", cluster_idx, len);
 
     if len == 0 {
-        return Err(());
+        return None;
     }
 
     // TODO: make this atomic
@@ -102,7 +102,7 @@ pub fn select_backend(
         if let Some(backend) = unsafe { (*cluster).backends.data.get(idx as usize) }
             && let Some(cookie) = claim_connection(ctx, backend.pool_idx, client_cookie)
         {
-            return Ok((cookie, backend.pool_idx));
+            return Some((cookie, backend.pool_idx));
         }
     }
 
@@ -110,5 +110,5 @@ pub fn select_backend(
 
     // TODO(future): fallback to userspace proxy when no backend are available
 
-    Err(())
+    None
 }
