@@ -46,8 +46,9 @@ pub struct BackendConnectionPool {
     pub connections: BoundedVec<SocketCookie, MAX_BACKEND_CONNECTION_POOL_SIZE>,
     // connection load balancing state
     // 8B align
-    pub active_connections: u32, // used for least-loaded policy
-    pub rr_counter: u32,         // round-robin counter
+    pub rr_counter: u64, // round-robin counter
+    // 8B align
+    pub active_connections: u64, // used for least-loaded policy
 }
 
 #[cfg(feature = "user")]

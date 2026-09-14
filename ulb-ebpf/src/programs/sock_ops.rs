@@ -28,7 +28,7 @@ use crate::{
         LISTENER_PORTS,
         SESSION_MAP,
     },
-    utils::atomic_add_i32,
+    utils::atomic_add_i64,
 };
 
 #[sock_ops]
@@ -39,11 +39,11 @@ fn ulb_sock_ops(ctx: SockOpsContext) -> u32 {
             let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut c_void) } as SocketCookie;
 
             if let Some(target) = unsafe { SESSION_MAP.get(cookie) } {
-                if let Some(pool) =
-                    BACKEND_CONNECTION_POOL_TABLE.get_ptr_mut(target.pool_idx as u32)
+                if target.update_active_connections == 1
+                    && let Some(pool) = BACKEND_CONNECTION_POOL_TABLE.get_ptr_mut(target.pool_idx)
                 {
                     unsafe {
-                        atomic_add_i32((&raw mut (*pool).active_connections) as *mut i32, -1);
+                        atomic_add_i64((&raw mut (*pool).active_connections) as *mut i64, -1);
                     }
                 }
 

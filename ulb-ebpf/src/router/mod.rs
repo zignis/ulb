@@ -81,7 +81,7 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
             let client_cookie =
                 unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) } as SocketCookie;
 
-            let Some((mut backend_cookie, pool_idx)) =
+            let Some((mut backend_cookie, pool_idx, update_active_connections)) =
                 select_backend(ctx, cluster_idx, client_cookie)
             else {
                 return send_client_response(ctx, HTTP_503_SERVICE_UNAVAILABLE);
@@ -90,10 +90,7 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
             #[allow(unused_variables)]
             if let Err(eno) = SESSION_MAP.insert(
                 client_cookie,
-                SessionTarget {
-                    cookie: backend_cookie,
-                    pool_idx: pool_idx as u64,
-                },
+                SessionTarget::new(backend_cookie, pool_idx, update_active_connections),
                 0,
             ) {
                 error!(
