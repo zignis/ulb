@@ -14,6 +14,9 @@ use crate::{
 pub enum LoadBalancingPolicy {
     #[default]
     RoundRobin,
+    LeastLoaded,
+    IpHash,
+    Random,
 }
 
 #[repr(C)]
