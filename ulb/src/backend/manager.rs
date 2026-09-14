@@ -112,10 +112,11 @@ impl BackendManager {
 
                 let pool_idx = self.next_pool_idx;
                 self.next_pool_idx += 1;
-                conn_pools.push(pool_idx);
+                conn_pools.push((pool_idx, backend.weight));
 
                 let mut pool = BackendConnectionPool {
                     connections: Default::default(),
+                    active_connections: 0,
                     rr_counter: 0,
                 };
 

@@ -23,8 +23,9 @@ pub struct Cluster {
     pub backends: BoundedVec<Backend, MAX_BACKENDS_PER_CLUSTER>,
     // 8B align
     pub policy: LoadBalancingPolicy,
-    // TODO: load balancing state
     pub rr_counter: u32, // round-robin counter
+    // 8B align
+    pub total_weight: u64, // total weight for WRR
 }
 
 #[repr(C)]
@@ -32,7 +33,7 @@ pub struct Cluster {
 pub struct Backend {
     // 8B align
     pub pool_idx: u32, // index into BACKEND_CONNECTION_POOL_TABLE
-    pub flags: u32,    // reserved for future usage
+    pub weight: u32,   // weight for round-robin
 }
 
 #[repr(C)]
@@ -42,7 +43,8 @@ pub struct BackendConnectionPool {
     pub connections: BoundedVec<SocketCookie, MAX_BACKEND_CONNECTION_POOL_SIZE>,
     // connection load balancing state
     // 8B align
-    pub rr_counter: u64, // round-robin counter
+    pub active_connections: u32, // used for least-loaded policy
+    pub rr_counter: u32,         // round-robin counter
 }
 
 #[cfg(feature = "user")]

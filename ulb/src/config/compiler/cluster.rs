@@ -29,16 +29,14 @@ pub fn compile_clusters(
                 cluster_cfg.name
             ))?
             .iter()
-            .map(|&pool_idx| Backend {
-                pool_idx,
-                flags: 0, // future use
-            })
+            .map(|&(pool_idx, weight)| Backend { pool_idx, weight })
             .collect::<Vec<_>>();
 
         clusters.push(Cluster {
             policy: cluster_cfg.policy.unwrap_or_default(),
             backends: backends.try_into().map_err(|_| anyhow!("infallible"))?,
             rr_counter: 0,
+            total_weight: backends.iter().map(|x| x.weight).sum().max(1),
         });
     }
 
