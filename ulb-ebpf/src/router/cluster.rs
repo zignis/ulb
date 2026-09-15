@@ -22,6 +22,12 @@ use crate::{
     warn,
 };
 
+/// https://github.com/torvalds/linux/blob/587858367581b9c55c3690f4e63382ad622719d4/include/linux/socket.h#L207
+const AF_INET: u32 = 2;
+
+/// https://github.com/torvalds/linux/blob/587858367581b9c55c3690f4e63382ad622719d4/include/linux/socket.h#L215
+const AF_INET6: u32 = 10;
+
 const MAX_BACKEND_SELECT_ATTEMPTS: u32 = 8;
 const MAX_CONNECTION_SELECT_ATTEMPTS: u32 = 4;
 
@@ -94,7 +100,18 @@ pub fn select_backend(
     let start_idx = match unsafe { (*cluster).policy } {
         LoadBalancingPolicy::Random => unsafe { bpf_get_prandom_u32() % len },
 
-        LoadBalancingPolicy::IpHash => ctx.skb.remote_ipv4() % len,
+        LoadBalancingPolicy::IpHash => {
+            let ip = match ctx.skb.family() {
+                AF_INET => ctx.skb.remote_ipv4(),
+                AF_INET6 => {
+                    let ip = ctx.skb.remote_ipv6();
+                    ip[0] ^ ip[1] ^ ip[2] ^ ip[3] // 4 octets
+                }
+                _ => 0,
+            };
+
+            ip % len
+        }
 
         LoadBalancingPolicy::RoundRobin => {
             // TODO: impl
