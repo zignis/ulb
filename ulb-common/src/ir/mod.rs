@@ -2,7 +2,7 @@ pub const MAX_LISTENERS: usize = 256;
 pub const MAX_VHOSTS: u32 = 32;
 pub const MAX_ROUTES_PER_VHOST: u32 = 64;
 pub const MAX_ROUTES: u32 = MAX_VHOSTS * MAX_ROUTES_PER_VHOST;
-pub const MAX_HEADER_RULES_PER_ROUTE: usize = 64;
+pub const MAX_HEADER_RULES_PER_ROUTE: usize = u32::BITS as usize; // must fit in the mask
 pub const MAX_HEADER_RULES: u32 = MAX_ROUTES * MAX_HEADER_RULES_PER_ROUTE as u32;
 
 pub const MAX_CLUSTERS: u32 = 64;
