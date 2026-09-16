@@ -1,6 +1,14 @@
 #![cfg(target_os = "linux")]
 
 use clap::Parser;
+use libc::{
+    RLIM_INFINITY,
+    RLIMIT_MEMLOCK,
+    RLIMIT_NOFILE,
+    getrlimit,
+    rlimit,
+    setrlimit,
+};
 use log::{
     Level,
     info,
@@ -38,6 +46,36 @@ struct Args {
     cgroup: String,
 }
 
+fn bump_memlock_limit() {
+    // this is needed for older kernels that don't use the new
+    // memcg based accounting, see https://lwn.net/Articles/837122/
+    let rlim = rlimit {
+        rlim_cur: RLIM_INFINITY,
+        rlim_max: RLIM_INFINITY,
+    };
+    let ret = unsafe { setrlimit(RLIMIT_MEMLOCK, &rlim) };
+    if ret != 0 {
+        info!("remove limit on locked memory failed, ret is: {ret}");
+    }
+}
+
+fn bump_nofile_limit() {
+    let mut rlim = rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+
+    if unsafe { getrlimit(RLIMIT_NOFILE, &mut rlim) } == 0 {
+        rlim.rlim_cur = rlim.rlim_max;
+        let ret = unsafe { setrlimit(RLIMIT_NOFILE, &rlim) };
+        if ret != 0 {
+            info!("increase open file limit failed, ret is: {ret}");
+        }
+    } else {
+        info!("failed to get os open file limit");
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -52,6 +90,9 @@ async fn main() -> anyhow::Result<()> {
         env!("CARGO_PKG_VERSION_MAJOR"),
         env!("CARGO_PKG_VERSION_MINOR")
     );
+
+    bump_memlock_limit();
+    bump_nofile_limit();
 
     let mut bpf = bootstrap_bpf(&args.cgroup)?;
 
