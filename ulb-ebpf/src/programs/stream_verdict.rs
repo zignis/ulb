@@ -22,6 +22,7 @@ use crate::{
         SESSION_MAP,
     },
     router::route_req,
+    utils::remove_session_mapping,
 };
 
 #[stream_verdict]
@@ -32,8 +33,15 @@ fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
 
     // fast-path
     if let Some(backend) = unsafe { SESSION_MAP.get(cookie) } {
-        let mut cookie = backend.cookie;
-        return BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut cookie, BPF_SKB_EGRESS) as u32;
+        let mut backend_cookie = backend.cookie;
+        let ret =
+            BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut backend_cookie, BPF_SKB_EGRESS) as u32;
+        if ret == SK_DROP {
+            debug!(ctx, "[E:1] removing stale session");
+            remove_session_mapping(&cookie);
+        } else {
+            return ret;
+        }
     }
 
     if unsafe { bpf_skb_pull_data(ctx.skb.skb, 0) } < 0 {

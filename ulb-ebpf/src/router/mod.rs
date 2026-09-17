@@ -35,6 +35,7 @@ use crate::{
         HTTP_500_INTERNAL_SERVER_ERROR,
         HTTP_503_SERVICE_UNAVAILABLE,
         get_http_buf,
+        remove_session_mapping,
         send_client_response,
     },
 };
@@ -102,7 +103,13 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
                 return send_client_response(ctx, HTTP_500_INTERNAL_SERVER_ERROR);
             }
 
-            BACKEND_CONNECTION_MAP.redirect_skb(ctx, &mut backend_cookie, BPF_SKB_EGRESS) as u32
+            let ret = BACKEND_CONNECTION_MAP.redirect_skb(ctx, &mut backend_cookie, BPF_SKB_EGRESS)
+                as u32;
+            if ret == SK_DROP {
+                debug!(&ctx, "[E:2] redirect failure; removing session");
+                remove_session_mapping(&client_cookie);
+            }
+            ret
         }
     }
 }
