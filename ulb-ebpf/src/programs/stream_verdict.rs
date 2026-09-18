@@ -8,6 +8,7 @@ use aya_ebpf::{
     macros::stream_verdict,
     programs::SkBuffContext,
 };
+use ulb_common::http::HTTP_REQ_MAX_SCRATCH_SIZE;
 
 use crate::{
     BPF_SKB_EGRESS,
@@ -44,7 +45,13 @@ fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
         }
     }
 
-    if unsafe { bpf_skb_pull_data(ctx.skb.skb, 0) } < 0 {
+    if unsafe {
+        bpf_skb_pull_data(
+            ctx.skb.skb,
+            (HTTP_REQ_MAX_SCRATCH_SIZE as u32).min(ctx.len()),
+        )
+    } < 0
+    {
         return SK_DROP;
     }
 
