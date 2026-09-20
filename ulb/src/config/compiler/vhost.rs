@@ -10,7 +10,6 @@ use ulb_common::{
         HTTP_HDR_KEY_MAX_LEN,
         HTTP_HDR_VAL_MAX_LEN,
         HTTP_URI_MAX_LEN,
-        HttpMethod,
     },
     ir::{
         HDR_RULE_SENTINEL,
@@ -29,7 +28,9 @@ use ulb_common::{
 use crate::config::canonical::{
     ClusterIdxMap,
     RouteAction,
+    RouteConfig,
     UlbConfig,
+    VHostConfig,
 };
 
 #[derive(Debug)]
@@ -51,10 +52,31 @@ pub fn compile_vhosts(
 
     for listener in &cfg.listeners {
         let port = listener.addr.port();
+        let hosts_fallback = vec![VHostConfig {
+            host: "".to_string(),
+            routes: Vec::new(),
+        }];
+        let hosts = if listener.hosts.is_empty() {
+            &hosts_fallback
+        } else {
+            &listener.hosts
+        };
 
-        for vhost in &listener.hosts {
+        for vhost in hosts {
+            let routes_fallback = vec![RouteConfig {
+                path: "*".to_string(),
+                methods: None,
+                headers: Vec::new(),
+                action: RouteAction::Drop,
+            }];
+            let routes = if vhost.routes.is_empty() {
+                &routes_fallback
+            } else {
+                &vhost.routes
+            };
+
             let route_start = route_table.len() as u32;
-            let route_count = vhost.routes.len() as u32;
+            let route_count = routes.len() as u32;
 
             if route_count > MAX_ROUTES_PER_VHOST {
                 bail!("exceeded maximum routes per vhost ({route_count}/{MAX_ROUTES_PER_VHOST})");
@@ -84,7 +106,7 @@ pub fn compile_vhosts(
                 },
             );
 
-            for route_cfg in &vhost.routes {
+            for route_cfg in routes {
                 let (path, match_type) = match route_cfg.path.strip_suffix("*") {
                     Some(prefix) => (prefix, RouteMatchType::Prefix),
                     None => (route_cfg.path.as_str(), RouteMatchType::Exact),
@@ -157,10 +179,12 @@ pub fn compile_vhosts(
                     header_rule_table.push(rule);
                 }
 
-                for method_val in &route_cfg.methods {
-                    let method = HttpMethod::try_from(method_val.as_str())
-                        .map_err(|_| anyhow!("unknown http method: `{method_val}`"))?;
-                    route.method_mask |= method as u32;
+                if let Some(methods) = &route_cfg.methods {
+                    for &method in methods {
+                        route.method_mask |= method as u32;
+                    }
+                } else {
+                    route.method_mask = 0;
                 }
 
                 if let RouteAction::Forward(cluster) = &route_cfg.action {
