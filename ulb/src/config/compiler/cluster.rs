@@ -32,12 +32,21 @@ pub fn compile_clusters(
             .map(|&(pool_idx, weight)| Backend { pool_idx, weight })
             .collect::<Vec<_>>();
 
-        let total_weight = backends.iter().map(|x| x.weight).sum::<u32>().max(1) as u64;
+        let uniform_weights = backends
+            .first()
+            .map(|first| {
+                backends
+                    .iter()
+                    .all(|backend| backend.weight == first.weight)
+            })
+            .unwrap_or(true);
+        let total_weight = backends.iter().map(|x| x.weight).sum::<u32>().max(1);
 
         clusters.push(Cluster {
             policy: cluster_cfg.policy.unwrap_or_default(),
             backends: backends.try_into().map_err(|_| anyhow!("infallible"))?,
             rr_counter: 0,
+            uniform_weight: u32::from(uniform_weights),
             total_weight,
         });
     }

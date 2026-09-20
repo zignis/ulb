@@ -1,15 +1,21 @@
-use super::{
-    MAX_BACKEND_CONNECTION_POOL_SIZE,
-    MAX_BACKENDS_PER_CLUSTER,
+#[cfg(feature = "user")]
+use serde::{
+    Deserialize,
+    Serialize,
 };
+
 use crate::{
     containers::BoundedVec,
+    ir::{
+        MAX_BACKEND_CONNECTION_POOL_SIZE,
+        MAX_BACKENDS_PER_CLUSTER,
+    },
     session::SocketCookie,
 };
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default)]
-#[cfg_attr(feature = "user", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "user", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "user", serde(rename_all = "kebab-case"))]
 pub enum LoadBalancingPolicy {
     #[default]
@@ -28,7 +34,8 @@ pub struct Cluster {
     pub policy: LoadBalancingPolicy,
     pub rr_counter: u32, // round-robin counter
     // 8B align
-    pub total_weight: u64, // total weight for WRR
+    pub uniform_weight: u32, // 1 if weight=1 for all backends
+    pub total_weight: u32,   // total weight for WRR
 }
 
 #[repr(C)]
@@ -44,7 +51,6 @@ pub struct Backend {
 pub struct BackendConnectionPool {
     // 8B align
     pub connections: BoundedVec<SocketCookie, MAX_BACKEND_CONNECTION_POOL_SIZE>,
-    // connection load balancing state
     // 8B align
     pub rr_counter: u64, // round-robin counter
     // 8B align
