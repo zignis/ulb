@@ -98,7 +98,7 @@ fn validate_config(cfg: UlbConfig) -> anyhow::Result<UlbConfig> {
             bail!("unexpected duplicate cluster name: `{}`", cluster.name);
         }
 
-        if cluster.backends.empty() {
+        if cluster.backends.is_empty() {
             bail!(
                 "expected at-least one backend in the cluster `{}`",
                 cluster.name
