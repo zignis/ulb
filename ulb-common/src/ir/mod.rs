@@ -18,10 +18,10 @@ pub const MAX_TCP_PORTS: u32 = 65536;
 pub const LISTEN_BACKLOG_QUEUE_SIZE: u32 = 1024; // listener socket queue size
 pub const DEFAULT_BACKEND_WEIGHT: u32 = 1;
 
-pub mod cluster;
-pub mod header;
-pub mod route;
-pub mod vhost;
+mod cluster;
+mod header;
+mod route;
+mod vhost;
 
 pub use cluster::*;
 pub use header::*;
