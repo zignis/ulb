@@ -19,7 +19,7 @@ pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024;
 // verifier bound checks)
 pub const HTTP_URI_MAX_LEN: usize = 256;
 
-pub const HTTP_MAX_HEADERS: usize = 256; // TODO: try to increase this since we're matching headers on the fly
+pub const HTTP_MAX_HEADERS: usize = 256;
 
 // must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
 // verifier bound checks)
@@ -27,7 +27,7 @@ pub const HTTP_HDR_KEY_MAX_LEN: usize = 32;
 
 // must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
 // verifier bound checks)
-pub const HTTP_HDR_VAL_MAX_LEN: usize = 128; // TODO: try to increase this to maximum possible
+pub const HTTP_HDR_VAL_MAX_LEN: usize = 128;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
