@@ -26,6 +26,7 @@ pub(super) struct ParseKeyCtx {
 }
 
 impl ParseKeyCtx {
+    #[inline(always)]
     pub(super) fn new(data: SkbData, offset: usize) -> Self {
         Self {
             data,

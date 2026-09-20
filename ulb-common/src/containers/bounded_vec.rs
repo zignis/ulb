@@ -25,7 +25,8 @@ impl<T, const MAX_SIZE: usize> BoundedVec<T, MAX_SIZE>
 where
     T: Copy + Clone + Default,
 {
-    // only sets the len to 0
+    /// only sets the len to 0
+    #[inline(always)]
     pub fn reset(&mut self) {
         self.len = 0;
     }
@@ -64,6 +65,7 @@ where
 {
     type Target = [T; MAX_SIZE];
 
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.data
     }
@@ -73,6 +75,7 @@ impl<T, const MAX_SIZE: usize> DerefMut for BoundedVec<T, MAX_SIZE>
 where
     T: Copy + Clone + Default,
 {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
@@ -85,6 +88,7 @@ where
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
+    #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
         self.data[..self.len as usize].iter()
     }
@@ -97,6 +101,7 @@ where
     type Item = &'a mut T;
     type IntoIter = IterMut<'a, T>;
 
+    #[inline(always)]
     fn into_iter(self) -> Self::IntoIter {
         self.data[..self.len as usize].iter_mut()
     }

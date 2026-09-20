@@ -34,6 +34,7 @@ pub struct BoundedStr<const MAX_SIZE: usize> {
 }
 
 impl<const MAX_SIZE: usize> Default for BoundedStr<MAX_SIZE> {
+    #[inline(always)]
     fn default() -> Self {
         #[allow(clippy::let_unit_value)]
         let _ = Self::CHECK_PWR_TWO;
@@ -50,12 +51,14 @@ impl<const MAX_SIZE: usize> Default for BoundedStr<MAX_SIZE> {
 impl<const MAX_SIZE: usize> Deref for BoundedStr<MAX_SIZE> {
     type Target = [u8; MAX_SIZE];
 
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
 impl<const MAX_SIZE: usize> DerefMut for BoundedStr<MAX_SIZE> {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
@@ -73,6 +76,7 @@ impl<const MAX_SIZE: usize> Display for BoundedStr<MAX_SIZE> {
 impl<const MAX_SIZE: usize> TryFrom<&str> for BoundedStr<MAX_SIZE> {
     type Error = ();
 
+    #[inline(always)]
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let bytes = value.as_bytes();
         let len = bytes.len();
@@ -94,7 +98,6 @@ impl<const MAX_SIZE: usize> TryFrom<&str> for BoundedStr<MAX_SIZE> {
 #[cfg(feature = "user")]
 impl<const MAX_SIZE: usize> TryFrom<String> for BoundedStr<MAX_SIZE> {
     type Error = ();
-
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.as_str().try_into()
     }
@@ -111,11 +114,13 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
     );
 
     /// just sets the len to 0
+    #[inline(always)]
     pub fn reset(&mut self) {
         self.len = 0;
     }
 
     /// zeros out bytes past len
+    #[inline(always)]
     pub fn clear_remaining(&mut self) {
         let len = self.len as usize;
         if len <= MAX_SIZE {
@@ -123,6 +128,7 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
         }
     }
 
+    #[inline(always)]
     pub fn clear_and_copy(&mut self, src: &BoundedStr<MAX_SIZE>) {
         let len = src.len as usize;
         self.len = src.len;
@@ -133,6 +139,7 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
         }
     }
 
+    #[inline(always)]
     pub fn make_ascii_lowercase(&mut self) {
         let valid_words = self.len.div_ceil(8);
         let words = unsafe {
@@ -149,10 +156,12 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
         }
     }
 
+    #[inline(always)]
     pub fn empty(&self) -> bool {
         self.len == 0
     }
 
+    #[inline(always)]
     pub fn matches_exact(self, other: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
         if self.len != other.len {
             return false;
@@ -161,6 +170,7 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
         self.matches_prefix(other, ci)
     }
 
+    #[inline(always)]
     pub fn matches_prefix(self, prefix: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
         if self.len < prefix.len {
             return false;
@@ -205,6 +215,7 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
         true
     }
 
+    #[inline(always)]
     pub fn matches_suffix(self, suffix: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
         if self.len < suffix.len {
             return false;

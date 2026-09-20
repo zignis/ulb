@@ -8,6 +8,7 @@ use crate::{
     utils::atomic_add_i64,
 };
 
+#[inline(always)]
 pub fn remove_session_mapping(cookie: &SocketCookie) {
     if let Some(target) = unsafe { SESSION_MAP.get(cookie) } {
         if target.update_active_connections == 1

@@ -50,18 +50,21 @@ pub enum HttpMethod {
 }
 
 impl From<HttpMethod> for u16 {
+    #[inline(always)]
     fn from(value: HttpMethod) -> Self {
         value as u16
     }
 }
 
 impl From<HttpMethod> for u32 {
+    #[inline(always)]
     fn from(value: HttpMethod) -> Self {
         value as u32
     }
 }
 
 impl HttpMethod {
+    #[inline(always)]
     pub fn match_mask(&self, mask: u32) -> bool {
         // if no allowed methods are specified by user, allow all methods
         if mask == 0 {
@@ -136,6 +139,7 @@ pub struct HttpHeader {
 impl HttpHeader {
     // resets the len of key and val
     // does not zero out the buffer
+    #[inline(always)]
     pub fn reset(&mut self) {
         self.key.len = 0;
         self.val.len = 0;
@@ -159,6 +163,7 @@ pub struct HttpRequest {
 }
 
 impl HttpRequest {
+    #[inline(always)]
     pub fn mark_route_dirty(&mut self, route_idx: usize) {
         if !self.dirty_route_map[route_idx] {
             self.dirty_route_map[route_idx] = true;
@@ -171,6 +176,7 @@ impl HttpRequest {
         }
     }
 
+    #[inline(always)]
     pub fn reset_rule_masks(&mut self) {
         let len = self.dirty_route_idx.len as usize;
 

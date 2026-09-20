@@ -41,6 +41,7 @@ pub enum HttpParseError {
 
 impl HttpParseError {
     #[cfg(feature = "debug")]
+    #[inline(always)]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::InvalidMethod => "invalid method",
@@ -50,6 +51,7 @@ impl HttpParseError {
         }
     }
 
+    #[inline(always)]
     fn http_response(&self) -> &[u8] {
         match self {
             Self::InvalidMethod => HTTP_501_NOT_IMPLEMENTED,
@@ -60,6 +62,7 @@ impl HttpParseError {
     }
 }
 
+#[inline(always)]
 pub fn parse_req(ctx: &SkBuffContext) -> u32 {
     let req = match get_http_buf() {
         Some(x) => x,

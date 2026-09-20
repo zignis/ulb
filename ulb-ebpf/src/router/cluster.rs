@@ -82,6 +82,7 @@ fn claim_connection(
     None
 }
 
+#[inline(always)]
 pub fn select_backend(
     ctx: &SkBuffContext,
     cluster_idx: u32,

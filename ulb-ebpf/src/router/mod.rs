@@ -44,6 +44,7 @@ mod cluster;
 mod route;
 mod vhost;
 
+#[inline(always)]
 pub fn route_req(ctx: &SkBuffContext) -> u32 {
     let local_port = ctx.skb.local_port();
     let Some(req) = get_http_buf() else {

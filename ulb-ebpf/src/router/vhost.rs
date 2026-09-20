@@ -8,6 +8,7 @@ use ulb_common::{
 
 use crate::maps::VHOST_MAP;
 
+#[inline(always)]
 pub fn resolve_vhost(req: &HttpRequest, port: u64) -> Option<&'static VHostValue> {
     if req.host.len == 0 {
         return None;

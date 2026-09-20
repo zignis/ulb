@@ -47,6 +47,7 @@ const ONS_SP: u32 = b32(b"ONS ");
 const CONN: u32 = b32(b"CONN");
 const ECT_SP: u32 = b32(b"ECT ");
 
+#[inline(always)]
 fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
     let prefix = data.read_u32(0).ok_or(HttpParseError::InvalidMethod)?;
     match prefix {
@@ -72,7 +73,7 @@ fn parse_method(data: SkbData) -> Result<(HttpMethod, usize), HttpParseError> {
 
 //
 
-#[inline(never)]
+#[inline(always)]
 fn parse_uri_len(data: SkbData, uri_start: usize) -> Result<usize, HttpParseError> {
     for i in 0..HTTP_URI_MAX_LEN {
         match data.at(uri_start + i) {
@@ -98,6 +99,7 @@ const HTTP: u32 = b32(b"HTTP");
 const V1P0: u32 = b32(b"/1.0");
 const V1P1: u32 = b32(b"/1.1");
 
+#[inline(always)]
 fn parse_version(
     data: SkbData,
     version_start: usize,
@@ -129,7 +131,7 @@ fn parse_version(
     }
 }
 
-#[inline(never)]
+#[inline(always)]
 pub fn parse_request_line(
     ctx: &SkBuffContext,
     req: &mut HttpRequest,

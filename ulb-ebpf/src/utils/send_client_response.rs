@@ -16,6 +16,7 @@ use crate::{
     maps::CLIENT_CONNECTION_MAP,
 };
 
+#[inline(always)]
 pub fn send_client_response(ctx: &SkBuffContext, response: &[u8]) -> u32 {
     let mut cookie = unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) } as SocketCookie;
     let len = response.len() as u32;

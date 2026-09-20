@@ -32,6 +32,7 @@ pub(super) struct UpdateRuleMaskCtx<'a> {
 }
 
 impl<'a> UpdateRuleMaskCtx<'a> {
+    #[inline(always)]
     pub(super) fn new(idx: u64, hdr: &'a HttpHeader, req: &'a mut HttpRequest) -> Self {
         Self { idx, hdr, req }
     }
@@ -62,6 +63,7 @@ pub(super) extern "C" fn update_rule_mask(_idx: u32, ctx: *mut c_void) -> c_long
     BPF_LOOP_NEXT
 }
 
+#[inline(never)]
 fn match_val(rule: &HeaderRule, hdr_val: &BoundedStr<HTTP_HDR_VAL_MAX_LEN>) -> bool {
     let ci = rule.case_insensitive == 1;
     match rule.match_type {

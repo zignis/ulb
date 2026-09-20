@@ -38,7 +38,6 @@ struct RouteLoopCtx<'a> {
     method_denied: bool,
 }
 
-// TODO: can this be inlined?
 #[inline(never)]
 fn match_path(
     req_path: &BoundedStr<HTTP_URI_MAX_LEN>,

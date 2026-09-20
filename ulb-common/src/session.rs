@@ -11,6 +11,7 @@ pub struct SessionTarget {
 }
 
 impl SessionTarget {
+    #[inline(always)]
     pub fn new(cookie: SocketCookie, pool_idx: u32, update_active_connections: bool) -> Self {
         Self {
             cookie,

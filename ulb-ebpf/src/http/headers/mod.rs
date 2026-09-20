@@ -76,6 +76,7 @@ struct ParseHdrCtx<'a> {
     err: bool,
 }
 
+#[inline(always)]
 pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
     let mut hdr = HttpHeader::default();
     let req = match get_http_buf() {
