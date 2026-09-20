@@ -1,6 +1,12 @@
 #[cfg(feature = "debug")]
 use core::ffi::CStr;
 
+#[cfg(feature = "user")]
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
 use crate::{
     containers::{
         BoundedStr,
@@ -28,6 +34,8 @@ pub const HTTP_HDR_VAL_MAX_LEN: usize = 128; // TODO: try to increase this to ma
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "user", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "user", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
 pub enum HttpMethod {
     Get     = 1 << 0,
     Put     = 1 << 1,
