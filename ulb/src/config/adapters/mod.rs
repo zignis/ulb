@@ -98,6 +98,13 @@ fn validate_config(cfg: UlbConfig) -> anyhow::Result<UlbConfig> {
             bail!("unexpected duplicate cluster name: `{}`", cluster.name);
         }
 
+        if cluster.backends.empty() {
+            bail!(
+                "expected at-least one backend in the cluster `{}`",
+                cluster.name
+            );
+        }
+
         if cluster.backends.len() > MAX_BACKENDS_PER_CLUSTER {
             bail!(
                 "exceeded maximum backends per cluster ({}/{MAX_BACKENDS_PER_CLUSTER})",
