@@ -162,7 +162,7 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
     }
 
     #[inline(always)]
-    pub fn matches_exact(self, other: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
+    pub fn matches_exact(&self, other: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
         if self.len != other.len {
             return false;
         }
@@ -171,7 +171,7 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
     }
 
     #[inline(always)]
-    pub fn matches_prefix(self, prefix: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
+    pub fn matches_prefix(&self, prefix: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
         if self.len < prefix.len {
             return false;
         }
@@ -216,7 +216,7 @@ impl<const MAX_SIZE: usize> BoundedStr<MAX_SIZE> {
     }
 
     #[inline(always)]
-    pub fn matches_suffix(self, suffix: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
+    pub fn matches_suffix(&self, suffix: &BoundedStr<MAX_SIZE>, ci: bool) -> bool {
         if self.len < suffix.len {
             return false;
         }
