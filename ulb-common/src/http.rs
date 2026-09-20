@@ -1,6 +1,3 @@
-#[cfg(feature = "debug")]
-use core::ffi::CStr;
-
 #[cfg(feature = "user")]
 use serde::{
     Deserialize,
@@ -73,22 +70,6 @@ impl HttpMethod {
 
         (mask & u32::from(*self)) != 0
     }
-
-    #[cfg(feature = "debug")]
-    pub const fn as_c_str(&self) -> &'static CStr {
-        match self {
-            Self::Get => c"GET",
-            Self::Put => c"PUT",
-            Self::Post => c"POST",
-            Self::Head => c"HEAD",
-            Self::Patch => c"PATCH",
-            Self::Trace => c"TRACE",
-            Self::Query => c"QUERY",
-            Self::Delete => c"DELETE",
-            Self::Connect => c"CONNECT",
-            Self::Options => c"OPTIONS",
-        }
-    }
 }
 
 #[cfg(feature = "user")]
@@ -117,16 +98,6 @@ impl TryFrom<&str> for HttpMethod {
 pub enum HttpVersion {
     V1P0,
     V1P1,
-}
-
-impl HttpVersion {
-    #[cfg(feature = "debug")]
-    pub const fn as_c_str(&self) -> &'static CStr {
-        match self {
-            Self::V1P0 => c"HTTP/1.0",
-            Self::V1P1 => c"HTTP/1.1",
-        }
-    }
 }
 
 #[repr(C)]
