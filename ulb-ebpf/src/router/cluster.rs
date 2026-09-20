@@ -4,7 +4,12 @@ use aya_ebpf::{
     programs::SkBuffContext,
 };
 use ulb_common::{
-    ir::cluster::LoadBalancingPolicy,
+    containers::BoundedVec,
+    ir::{
+        Backend,
+        LoadBalancingPolicy,
+        MAX_BACKENDS_PER_CLUSTER,
+    },
     session::{
         SessionTarget,
         SocketCookie,
@@ -115,19 +120,68 @@ pub fn select_backend(
         }
 
         LoadBalancingPolicy::RoundRobin => {
-            // TODO: impl
+            if unsafe { (*cluster).uniform_weight } == 1 {
+                let counter = unsafe { &mut (*cluster).rr_counter };
+                let start_idx = *counter % len;
+                *counter = counter.wrapping_add(1);
+                start_idx
+            } else {
+                let counter = unsafe { &mut (*cluster).rr_counter };
+                let target = *counter % unsafe { (*cluster).total_weight }.max(1);
+                *counter = counter.wrapping_add(1);
+                let mut weight = 0;
+                let mut idx = 0;
 
-            let counter = unsafe { &mut (*cluster).rr_counter };
-            let start_idx = *counter % len;
-            *counter = counter.wrapping_add(1);
-            start_idx
+                while idx < MAX_BACKENDS_PER_CLUSTER {
+                    if idx >= len as usize {
+                        break;
+                    }
+
+                    if let Some(backend) = unsafe { (*cluster).backends.data.get(idx) } {
+                        weight += backend.weight;
+
+                        if weight > target {
+                            break;
+                        }
+                    }
+
+                    idx += 1;
+                }
+
+                idx as u32
+            }
         }
 
         LoadBalancingPolicy::LeastLoaded => {
             update_active_connections = true;
 
-            // TODO: impl
-            0
+            if len == 1 {
+                0
+            } else {
+                let idx1 = unsafe { bpf_get_prandom_u32() } % len;
+                let mut idx2 = unsafe { bpf_get_prandom_u32() } % (len - 1);
+
+                if idx2 >= idx1 {
+                    idx2 += 1;
+                }
+
+                let (active1, w1) =
+                    get_backend_stats(unsafe { &(*cluster).backends }, idx1 as usize);
+                let (active2, w2) =
+                    get_backend_stats(unsafe { &(*cluster).backends }, idx2 as usize);
+
+                if active2 == u64::MAX {
+                    idx1
+                } else if active1 == u64::MAX {
+                    idx2
+                } else if unsafe { (*cluster).uniform_weight } == 1 {
+                    if active1 <= active2 { idx1 } else { idx2 }
+                } else if active1 * w2 <= active2 * w1 {
+                    idx1
+                } else {
+                    idx2
+                }
+            }
         }
     };
 
@@ -152,4 +206,26 @@ pub fn select_backend(
     // TODO(future): fallback to userspace proxy when no backend are available
 
     None
+}
+
+#[inline(always)]
+fn get_backend_stats(
+    backends: &BoundedVec<Backend, MAX_BACKENDS_PER_CLUSTER>,
+    idx: usize,
+) -> (u64, u64) {
+    if idx >= MAX_BACKENDS_PER_CLUSTER {
+        return (u64::MAX, 1);
+    }
+
+    let backend = match backends.data.get(idx) {
+        Some(backend) => backend,
+        None => return (u64::MAX, 1),
+    };
+    let weight = backend.weight as u64;
+    let active = match BACKEND_CONNECTION_POOL_TABLE.get_ptr(backend.pool_idx) {
+        Some(pool) => unsafe { (*pool).active_connections },
+        None => u64::MAX,
+    };
+
+    (active, weight)
 }
