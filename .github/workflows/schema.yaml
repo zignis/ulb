@@ -1,0 +1,68 @@
+name: generate config schema
+
+on:
+  push:
+    tags:
+      - 'v*.*.0'
+
+concurrency:
+  group: generate-schema-${{ github.ref_name }}
+
+jobs:
+  generate-schema:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: setup rust
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: validate and set schema version
+        run: |
+          VERSION=${{ github.ref_name }}
+          if ! echo "$VERSION" | grep -qP '^v\d+\.\d+\.0$'; then
+            echo "::error::Tag $VERSION does not match expected format vMAJOR.MINOR.0"
+            exit 1
+          fi
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          echo "SCHEMA_VER=$MAJOR_MINOR" >> $GITHUB_ENV
+
+      - name: generate schema
+        run: |
+          mkdir -p /tmp/schemas
+          cargo run --release --bin gen_schema --features schema > /tmp/schemas/ulb-latest.schema.json
+          cp /tmp/schemas/ulb-latest.schema.json /tmp/schemas/ulb-${{ env.SCHEMA_VER }}.schema.json
+
+      - name: upload schema to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            /tmp/schemas/ulb-${{ env.SCHEMA_VER }}.schema.json
+            /tmp/schemas/ulb-latest.schema.json
+          generate_release_notes: true
+
+      - name: checkout main for pr
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: copy generated schemas
+        run: |
+          mkdir -p schemas
+          cp -f /tmp/schemas/* schemas/
+
+      - name: create pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "release: add json schema for ${{ env.SCHEMA_VER }}"
+          title: "update JSON schema for ${{ env.SCHEMA_VER }}"
+          body: "Automated PR to update JSON schema after tagging `${{ github.ref_name }}`."
+          branch: "update-schema-${{ env.SCHEMA_VER }}"
+          base: main
