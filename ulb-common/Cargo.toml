@@ -7,10 +7,12 @@ license.workspace = true
 [features]
 default = []
 debug = []
-user = ["aya", "serde"]
+user = ["dep:aya", "dep:serde"]
+schema = ["dep:schemars"]
 
 [dependencies]
 aya = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 
 [lib]

@@ -8,9 +8,9 @@ default = []
 debug = ["dep:aya-log-ebpf", "ulb-common/debug"]
 
 [dependencies]
-ulb-common = { path = "../ulb-common" }
 aya-ebpf = { workspace = true }
 aya-log-ebpf = { workspace = true, optional = true }
+ulb-common = { path = "../ulb-common" }
 
 [build-dependencies]
 which = { workspace = true }
