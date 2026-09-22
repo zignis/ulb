@@ -1,0 +1,98 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zignis/ulb/refs/heads/main/schemas/ulb-latest.schema.json
+
+rlimit_nofile: 1048576
+
+listeners:
+  - name: simple_routing
+    addr: 0.0.0.0:8085
+    hosts:
+      - host: bench.local
+        routes:
+          - path: "/*"
+            methods:
+              - POST
+            action:
+              forward: backend
+
+  - name: deep_headers
+    addr: 0.0.0.0:8086
+    hosts:
+      - host: bench.local
+        routes:
+          - path: "/*"
+            methods:
+              - POST
+            headers:
+              - name: "x-bench-hdr-1"
+                value: "bench-hdr-val-1"
+              - name: "x-bench-hdr-2"
+                value: "bench-hdr-val-2"
+              - name: "x-bench-hdr-3"
+                value: "bench-hdr-val-3"
+              - name: "x-bench-hdr-4"
+                value: "bench-hdr-val-4"
+              - name: "x-bench-hdr-5"
+                value: "bench-hdr-val-5"
+              - name: "x-bench-hdr-6"
+                value: "bench-hdr-val-6"
+              - name: "x-bench-hdr-7"
+                value: "bench-hdr-val-7"
+              - name: "x-bench-hdr-8"
+                value: "bench-hdr-val-8"
+              - name: "x-bench-hdr-9"
+                value: "bench-hdr-val-9"
+              - name: "x-bench-hdr-10"
+                value: "bench-hdr-val-10"
+              - name: "x-bench-hdr-11"
+                value: "bench-hdr-val-11"
+              - name: "x-bench-hdr-12"
+                value: "bench-hdr-val-12"
+              - name: "x-bench-hdr-13"
+                value: "bench-hdr-val-13"
+              - name: "x-bench-hdr-14"
+                value: "bench-hdr-val-14"
+              - name: "x-bench-hdr-15"
+                value: "bench-hdr-val-15"
+              - name: "x-bench-hdr-16"
+                value: "bench-hdr-val-16"
+              - name: "x-bench-hdr-17"
+                value: "bench-hdr-val-17"
+              - name: "x-bench-hdr-18"
+                value: "bench-hdr-val-18"
+              - name: "x-bench-hdr-19"
+                value: "bench-hdr-val-19"
+              - name: "x-bench-hdr-20"
+                value: "bench-hdr-val-20"
+              - name: "x-bench-hdr-21"
+                value: "bench-hdr-val-21"
+              - name: "x-bench-hdr-22"
+                value: "bench-hdr-val-22"
+              - name: "x-bench-hdr-23"
+                value: "bench-hdr-val-23"
+              - name: "x-bench-hdr-24"
+                value: "bench-hdr-val-24"
+              - name: "x-bench-hdr-25"
+                value: "bench-hdr-val-25"
+              - name: "x-bench-hdr-26"
+                value: "bench-hdr-val-26"
+              - name: "x-bench-hdr-27"
+                value: "bench-hdr-val-27"
+              - name: "x-bench-hdr-28"
+                value: "bench-hdr-val-28"
+              - name: "x-bench-hdr-29"
+                value: "bench-hdr-val-29"
+              - name: "x-bench-hdr-30"
+                value: "bench-hdr-val-30"
+              - name: "x-bench-hdr-31"
+                value: "bench-hdr-val-31"
+              - name: "x-bench-hdr-32"
+                value: "bench-hdr-val-32"
+            action:
+              forward: backend
+
+clusters:
+  - name: backend
+    policy: round-robin
+    backends:
+      - addr: "127.0.0.1:8095"
+        pool_size: 1024
