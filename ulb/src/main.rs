@@ -16,8 +16,7 @@ use log::{
 };
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
-
-use crate::{
+use ulb::{
     backend::BackendManager,
     bpf_bootstrap::bootstrap_bpf,
     config::{
@@ -28,14 +27,8 @@ use crate::{
         compiler::compile,
     },
     control_plane::ControlPlane,
+    telemetry,
 };
-
-mod backend;
-mod bpf_bootstrap;
-mod config;
-mod control_plane;
-mod telemetry;
-mod utils;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
