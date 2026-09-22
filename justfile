@@ -19,3 +19,6 @@ clippy:
 
 taplo:
     taplo format
+
+gen_schema:
+    cargo run --bin gen_schema --features schema > schemas/ulb.schema.json
