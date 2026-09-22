@@ -16,3 +16,6 @@ fmt:
 clippy:
     cargo clippy --workspace --exclude ulb-ebpf --all-targets --all-features -- -D warnings
     cargo +nightly clippy -p ulb-ebpf --target bpfel-unknown-none -Z build-std=core --all-features -- -D warnings
+
+taplo:
+    taplo format
