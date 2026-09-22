@@ -59,20 +59,21 @@ fn bump_memlock_limit() {
     }
 }
 
-fn bump_nofile_limit() {
+fn bump_nofile_limit(limit: Option<u64>) {
     let mut rlim = rlimit {
         rlim_cur: 0,
-        rlim_max: 0,
+        rlim_max: limit.unwrap_or_default(),
     };
 
-    if unsafe { getrlimit(RLIMIT_NOFILE, &mut rlim) } == 0 {
-        rlim.rlim_cur = rlim.rlim_max;
-        let ret = unsafe { setrlimit(RLIMIT_NOFILE, &rlim) };
-        if ret != 0 {
-            info!("increase open file limit failed, ret is: {ret}");
-        }
-    } else {
-        info!("failed to get os open file limit");
+    if limit.is_none() && unsafe { getrlimit(RLIMIT_NOFILE, &mut rlim) } != 0 {
+        info!("failed to get OS open file limit");
+        return;
+    }
+
+    rlim.rlim_cur = rlim.rlim_max;
+    let ret = unsafe { setrlimit(RLIMIT_NOFILE, &rlim) };
+    if ret != 0 {
+        info!("increase open file limit failed, ret is: {ret}");
     }
 }
 
@@ -91,13 +92,13 @@ async fn main() -> anyhow::Result<()> {
         env!("CARGO_PKG_VERSION_MINOR")
     );
 
-    bump_memlock_limit();
-    bump_nofile_limit();
-
-    let mut bpf = bootstrap_bpf(&args.cgroup)?;
-
     let cfg = load_config::<NativeAdapter, _>(&args.config)?;
     info!("config loaded");
+
+    bump_memlock_limit();
+    bump_nofile_limit(cfg.rlimit_nofile);
+
+    let mut bpf = bootstrap_bpf(&args.cgroup)?;
 
     for listener_cfg in &cfg.listeners {
         bpf.listener_ports

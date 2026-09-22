@@ -32,6 +32,8 @@ pub type ClusterIdxMap = HashMap<String, u32>;
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct UlbConfig {
+    #[serde(default)]
+    pub rlimit_nofile: Option<u64>,
     pub listeners: Vec<ListenerConfig>,
     pub clusters: Vec<ClusterConfig>,
 }
