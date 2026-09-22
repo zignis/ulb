@@ -73,8 +73,8 @@ pub struct BackendManager {
     next_pool_idx: u32,
 }
 
-impl BackendManager {
-    pub fn new() -> Self {
+impl Default for BackendManager {
+    fn default() -> Self {
         let (event_tx, event_rx) = unbounded_channel();
         Self {
             event_tx,
@@ -82,6 +82,12 @@ impl BackendManager {
             tasks: JoinSet::new(),
             next_pool_idx: 0,
         }
+    }
+}
+
+impl BackendManager {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub async fn next_event(&mut self) -> Option<ManagerEvent> {
