@@ -88,7 +88,7 @@ fn get_style(level: Level, is_error: bool, is_kernel: bool) -> Style {
     }
 }
 
-pub(super) fn init() {
+pub fn init() {
     Builder::from_default_env()
         .format(|buf, record| {
             let target = record.target();
