@@ -1,0 +1,56 @@
+name: generate config schema
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-schema
+
+jobs:
+  generate-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: setup rust
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: generate schema
+        run: |
+          mkdir -p schemas
+          cargo run --bin gen_schema --features schema > schemas/ulb-latest.schema.json
+          cp schemas/ulb-latest.schema.json schemas/ulb-${{ github.ref_name }}.schema.json
+
+      - name: upload schema
+        uses: softprops/action-gh-release@v2
+        with:
+          files: schemas/ulb-${{ github.ref_name }}.schema.json
+          generate_release_notes: true
+
+      - name: commit schema to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+
+          mv schemas /tmp/schemas_backup
+          git checkout main
+
+          mkdir -p schemas
+          cp -f /tmp/schemas_backup/* schemas/
+
+          git add schemas/ulb-latest.schema.json
+          git add schemas/ulb-${{ github.ref_name }}.schema.json
+
+          if ! git diff --cached --quiet; then
+            git commit -m "release: add json schema for ${{ github.ref_name }}"
+            git push origin main
+          fi
