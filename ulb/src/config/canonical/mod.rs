@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
 use serde::{
     Deserialize,
     Serialize,
@@ -27,6 +29,8 @@ pub type ClusterConnectionPoolMap = HashMap<String, Vec<(BackendConnectionPoolId
 pub type ClusterIdxMap = HashMap<String, u32>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct UlbConfig {
     pub listeners: Vec<ListenerConfig>,
     pub clusters: Vec<ClusterConfig>,

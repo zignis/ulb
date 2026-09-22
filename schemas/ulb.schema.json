@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UlbConfig",
+  "type": "object",
+  "properties": {
+    "clusters": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ClusterConfig"
+      }
+    },
+    "listeners": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ListenerConfig"
+      }
+    },
+    "rlimit_nofile": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "default": null,
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "listeners",
+    "clusters"
+  ],
+  "$defs": {
+    "BackendConfig": {
+      "type": "object",
+      "properties": {
+        "addr": {
+          "type": "string"
+        },
+        "pool_size": {
+          "type": "integer",
+          "format": "uint",
+          "default": 1024,
+          "minimum": 0
+        },
+        "weight": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 1,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "addr"
+      ]
+    },
+    "ClusterConfig": {
+      "type": "object",
+      "properties": {
+        "backends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BackendConfig"
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LoadBalancingPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "backends"
+      ]
+    },
+    "HeaderMatchConfig": {
+      "type": "object",
+      "properties": {
+        "case_insensitive": {
+          "type": "boolean",
+          "default": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value"
+      ]
+    },
+    "HttpMethod": {
+      "type": "string",
+      "enum": [
+        "GET",
+        "PUT",
+        "POST",
+        "HEAD",
+        "PATCH",
+        "TRACE",
+        "QUERY",
+        "DELETE",
+        "CONNECT",
+        "OPTIONS"
+      ]
+    },
+    "ListenerConfig": {
+      "type": "object",
+      "properties": {
+        "addr": {
+          "type": "string"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VHostConfig"
+          }
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "addr",
+        "hosts"
+      ]
+    },
+    "LoadBalancingPolicy": {
+      "type": "string",
+      "enum": [
+        "round-robin",
+        "least-loaded",
+        "ip-hash",
+        "random"
+      ]
+    },
+    "RouteActionParser": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "RouteConfig": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/RouteActionParser"
+        },
+        "headers": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HeaderMatchConfig"
+          }
+        },
+        "methods": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/HttpMethod"
+          }
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "action"
+      ]
+    },
+    "VHostConfig": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RouteConfig"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "routes"
+      ]
+    }
+  }
+}

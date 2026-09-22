@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
 use serde::{
     Deserialize,
     Serialize,
@@ -10,6 +12,8 @@ use ulb_common::ir::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct BackendConfig {
     pub addr: SocketAddr,
     #[serde(default = "default_pool_size")]

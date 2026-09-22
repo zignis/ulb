@@ -1,3 +1,5 @@
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
 #[cfg(feature = "user")]
 use serde::{
     Deserialize,
@@ -17,6 +19,7 @@ use crate::{
 #[derive(Debug, Copy, Clone, Default)]
 #[cfg_attr(feature = "user", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "user", serde(rename_all = "kebab-case"))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum LoadBalancingPolicy {
     #[default]
     RoundRobin,

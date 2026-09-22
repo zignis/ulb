@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
 use serde::{
     Deserialize,
     Deserializer,
@@ -9,6 +11,8 @@ use serde::{
 use ulb_common::http::HttpMethod;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct RouteConfig {
     pub path: String,
     #[serde(default, deserialize_with = "deserialize_methods")]
@@ -20,6 +24,8 @@ pub struct RouteConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(try_from = "RouteActionParser")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(with = "RouteActionParser"))]
 pub enum RouteAction {
     Forward(String /* cluster name */),
     Drop,
@@ -27,12 +33,15 @@ pub enum RouteAction {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 enum RouteActionParser {
     Map(HashMap<String, String>),
     Str(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct HeaderMatchConfig {
     pub name: String,
     pub value: String,

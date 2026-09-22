@@ -1,3 +1,5 @@
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
 #[cfg(feature = "user")]
 use serde::{
     Deserialize,
@@ -33,6 +35,7 @@ pub const HTTP_HDR_VAL_MAX_LEN: usize = 128;
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "user", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "user", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum HttpMethod {
     Get     = 1 << 0,
     Put     = 1 << 1,
