@@ -17,7 +17,7 @@ def main():
     run_benchmark(
         lb_name=args.lb_name,
         metric_name="workers",
-        results_subdir="latency",
+        results_subdir="throughput",
         params_list=workers,
         param_cli_arg="--workers",
         target_port="8085",
