@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+import argparse
+from runner import run_benchmark
+
+
+def main():
+    parser = argparse.ArgumentParser(description="header depth vs throughput/latency")
+    parser.add_argument("lb_name", help="load balanacer name")
+    args = parser.parse_args()
+
+    header_depths = [34, 64, 96, 128, 192, 256]
+    fixed = {
+        "--req-body-size": "0",
+        "--workers": "64",
+    }
+
+    run_benchmark(
+        lb_name=args.lb_name,
+        metric_name="header_count",
+        results_subdir="hdr_depth",
+        params_list=header_depths,
+        param_cli_arg="--header-count",
+        target_port="8086",
+        fixed_args=fixed,
+    )
+
+
+if __name__ == "__main__":
+    main()
