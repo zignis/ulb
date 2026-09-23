@@ -15,21 +15,21 @@ use crate::{
 };
 
 // 8kb for req line and headers
-pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 8 * 1024;
+pub const HTTP_REQ_MAX_SCRATCH_SIZE: usize = 1 << 13;
 
 // must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
 // verifier bound checks)
-pub const HTTP_URI_MAX_LEN: usize = 256;
+pub const HTTP_URI_MAX_LEN: usize = 1 << 8;
 
-pub const HTTP_MAX_HEADERS: usize = 256;
-
-// must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
-// verifier bound checks)
-pub const HTTP_HDR_KEY_MAX_LEN: usize = 32;
+pub const HTTP_MAX_HEADERS: usize = 1 << 8;
 
 // must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
 // verifier bound checks)
-pub const HTTP_HDR_VAL_MAX_LEN: usize = 128;
+pub const HTTP_HDR_KEY_MAX_LEN: usize = 1 << 5;
+
+// must be a multiple of 8 (for aligned batch reading) and a power of 2 (for
+// verifier bound checks)
+pub const HTTP_HDR_VAL_MAX_LEN: usize = 1 << 7;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
