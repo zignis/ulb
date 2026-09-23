@@ -34,7 +34,9 @@ VERSION_ID="24.04"
 
 ### Harness
 
+```
 nginx version: nginx/1.24.0 (Ubuntu)
 envoy version: a0504e87c5a246cb097b37049b1e4dc7706c2a90/1.32.2/Clean/RELEASE/BoringSSL
 HAProxy version 2.8.16-0ubuntu0.24.04.3 2026/06/19
 rustc 1.95.0 (59807616e 2026-04-14)
+```
