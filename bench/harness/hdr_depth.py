@@ -8,7 +8,7 @@ def main():
     parser.add_argument("lb_name", help="load balanacer name")
     args = parser.parse_args()
 
-    header_depths = [34, 64, 96, 128, 192, 256]
+    header_depths = [35, 64, 96, 128, 192, 256]
     fixed = {
         "--req-body-size": "0",
         "--workers": "64",
