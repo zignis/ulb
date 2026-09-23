@@ -8,7 +8,7 @@ def main():
     parser.add_argument("lb_name", help="load balanacer name")
     args = parser.parse_args()
 
-    workers = [2**i for i in range(11)]
+    workers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 960]
     fixed = {
         "--req-body-size": "0",
         "--header-count": "2",
