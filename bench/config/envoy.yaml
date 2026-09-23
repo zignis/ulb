@@ -182,7 +182,7 @@ static_resources:
     circuit_breakers:
       thresholds:
         - priority: DEFAULT
-          max_connections: 1024
+          max_connections: 60000
     load_assignment:
       cluster_name: backend_cluster
       endpoints:
