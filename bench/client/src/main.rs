@@ -190,6 +190,13 @@ async fn run_phase(
 
     tokio::time::sleep(Duration::from_secs(duration)).await;
     stop.store(true, Ordering::Relaxed);
+    let elapsed = start.elapsed().as_secs_f64();
+
+    tokio::time::sleep(Duration::from_secs(5)).await; // grace
+
+    for handle in &handles {
+        handle.abort();
+    }
 
     let mut merged_hist = Histogram::<u64>::new_with_bounds(1, HIST_UPPER_BOUND, 3).unwrap();
     let mut total_reqs = 0;
@@ -203,7 +210,6 @@ async fn run_phase(
         }
     }
 
-    let elapsed = start.elapsed().as_secs_f64();
     (merged_hist, total_reqs, total_errs, elapsed)
 }
 
