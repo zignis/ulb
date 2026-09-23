@@ -40,7 +40,7 @@ use tokio::{
 
 const HIST_UPPER_BOUND: u64 = 10_000_000;
 const BODY_CH: u8 = b'#';
-const MIN_HEADERS: usize = 2;
+const MIN_HEADERS: usize = 3; // host, connection, content-length
 const NUM_SAMPLES: usize = 5;
 const HOST_HEADER: &str = "bench.local";
 const BENCH_HDR_KEY_PREFIX: &str = "x-bench-hdr";
