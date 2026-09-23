@@ -95,4 +95,4 @@ clusters:
     policy: round-robin
     backends:
       - addr: "127.0.0.1:8095"
-        pool_size: 60000
+        pool_size: 32768
