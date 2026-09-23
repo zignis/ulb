@@ -51,6 +51,9 @@ def run_benchmark(
             print(f"[{lb_name}] testing {metric_name}: {param}", file=sys.stderr)
 
             cmd = [
+                "taskset",
+                "-c",
+                "2-5",
                 client_bin,
                 "--addr",
                 f"127.0.0.1:{target_port}",
