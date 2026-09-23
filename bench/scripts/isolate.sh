@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-readonly STATE_FILE="/tmp/.bench_sysctl_state"
+readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+readonly STATE_FILE="${SCRIPT_DIR}/.isolate_state"
 
 save_value() {
 	local key="$1"
@@ -22,16 +23,14 @@ apply() {
 	echo 2 >"${rps_path}"
 
 	# lock cpus to max freq
+	local gov0="/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+	if [[ -r "${gov0}" ]]; then
+		echo "scaling_governor=$(cat "${gov0}")" >>"${STATE_FILE}"
+	fi
+	
 	local gov
 	for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-		if [[ -w "${gov}" ]]; then
-			local prev
-			prev="$(cat "${gov}")"
-			if ! grep -q "scaling_governor=" "${STATE_FILE}" 2>/dev/null; then
-				echo "scaling_governor=${prev}" >>"${STATE_FILE}"
-			fi
-			echo "performance" >"${gov}"
-		fi
+		echo "performance" >"${gov}" 2>/dev/null || true
 	done
 
 	save_value "net.ipv4.ip_local_port_range"
@@ -69,9 +68,7 @@ reset() {
 		scaling_governor)
 			local gov
 			for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-				if [[ -w "${gov}" ]]; then
-					echo "${value}" >"${gov}"
-				fi
+				echo "${value}" >"${gov}" 2>/dev/null || true
 			done
 			;;
 		*)
