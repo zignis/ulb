@@ -33,7 +33,10 @@ use hyper::{
     },
 };
 use hyper_util::rt::TokioIo;
-use tokio::net::TcpStream;
+use tokio::{
+    net::TcpStream,
+    time::sleep,
+};
 
 const HIST_UPPER_BOUND: u64 = 10_000_000;
 const BODY_CH: u8 = b'#';
@@ -98,6 +101,7 @@ async fn worker(
             }
             Err(_) => {
                 errs += 1;
+                sleep(Duration::from_millis(1)).await;
                 continue;
             }
         };
@@ -106,6 +110,7 @@ async fn worker(
             Ok(conn) => conn,
             Err(_) => {
                 errs += 1;
+                sleep(Duration::from_millis(1)).await;
                 continue;
             }
         };
@@ -121,6 +126,7 @@ async fn worker(
 
             if sender.ready().await.is_err() {
                 errs += 1;
+                sleep(Duration::from_millis(1)).await;
                 break;
             }
 
@@ -131,6 +137,7 @@ async fn worker(
                 Ok(mut res) => {
                     if !res.status().is_success() {
                         errs += 1;
+                        sleep(Duration::from_millis(1)).await;
                         break;
                     }
 
@@ -150,12 +157,14 @@ async fn worker(
                         reqs += 1;
                     } else {
                         errs += 1;
+                        sleep(Duration::from_millis(1)).await;
                         break;
                     }
                 }
 
                 Err(_) => {
                     errs += 1;
+                    sleep(Duration::from_millis(1)).await;
                     break;
                 }
             }
@@ -188,11 +197,10 @@ async fn run_phase(
         )));
     }
 
-    tokio::time::sleep(Duration::from_secs(duration)).await;
+    sleep(Duration::from_secs(duration)).await;
     stop.store(true, Ordering::Relaxed);
     let elapsed = start.elapsed().as_secs_f64();
-
-    tokio::time::sleep(Duration::from_secs(5)).await; // grace
+    sleep(Duration::from_secs(5)).await; // grace
 
     for handle in &handles {
         handle.abort();
