@@ -4,14 +4,15 @@ from runner import run_benchmark
 
 
 def main():
-    parser = argparse.ArgumentParser(description="request body size vs throughput/latency")
+    parser = argparse.ArgumentParser(
+        description="throughput/latency vs request body size"
+    )
     parser.add_argument("lb_name", help="load balanacer name")
     args = parser.parse_args()
 
     sizes = [2**i for i in range(23)]
     fixed = {
         "--workers": "64",
-        "--header-count": "2",
     }
 
     run_benchmark(

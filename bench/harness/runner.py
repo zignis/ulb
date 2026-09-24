@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-TIMEOUT = 1200 # 20 mins
+TIMEOUT = 1200  # 20 mins
 DEFAULT_LISTENER_PORT = "8085"
 
 

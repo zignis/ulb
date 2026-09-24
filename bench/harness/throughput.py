@@ -9,10 +9,7 @@ def main():
     args = parser.parse_args()
 
     workers = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 960]
-    fixed = {
-        "--req-body-size": "0",
-        "--header-count": "2",
-    }
+    fixed = {}
 
     run_benchmark(
         lb_name=args.lb_name,
