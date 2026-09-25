@@ -23,10 +23,14 @@ use hyper::{
     service::service_fn,
 };
 use hyper_util::rt::TokioIo;
+use mimalloc::MiMalloc;
 use tokio::{
     net::TcpListener,
     time::sleep,
 };
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 const BODY_CH: u8 = b'#';
 const MAX_HEADERS: usize = 300;

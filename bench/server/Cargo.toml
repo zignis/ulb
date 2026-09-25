@@ -10,4 +10,5 @@ clap = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
+mimalloc = { version = "0.1.52" }
 tokio = { workspace = true, features = ["full"] }
