@@ -27,7 +27,7 @@ apply() {
 	if [[ -r "${gov0}" ]]; then
 		echo "scaling_governor=$(cat "${gov0}")" >>"${STATE_FILE}"
 	fi
-	
+
 	local gov
 	for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
 		echo "performance" >"${gov}" 2>/dev/null || true
@@ -51,6 +51,19 @@ apply() {
 
 	save_value "net.core.bpf_jit_enable"
 	sysctl -q -w net.core.bpf_jit_enable=1
+
+	# allow large request body
+	save_value "net.core.rmem_max"
+	sysctl -q -w net.core.rmem_max=16777216
+
+	save_value "net.core.wmem_max"
+	sysctl -q -w net.core.wmem_max=16777216
+
+	save_value "net.ipv4.tcp_rmem"
+	sysctl -q -w net.ipv4.tcp_rmem="4096 131072 16777216"
+
+	save_value "net.ipv4.tcp_wmem"
+	sysctl -q -w net.ipv4.tcp_wmem="4096 16384 16777216"
 }
 
 reset() {
