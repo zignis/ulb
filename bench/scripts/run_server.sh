@@ -8,7 +8,7 @@ main() {
 		return 1
 	fi
 
-	sudo prlimit --nofile=1048576:1048576 taskset -c 6-15 "$@"
+	sudo prlimit --nofile=1048576:1048576 taskset -c 6-8 "$@"
 }
 
 main "$@"
