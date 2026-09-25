@@ -53,7 +53,7 @@ def run_benchmark(
             cmd = [
                 "taskset",
                 "-c",
-                "2-5",
+                "0,2-5",
                 client_bin,
                 "--addr",
                 f"127.0.0.1:{target_port}",
