@@ -33,6 +33,10 @@ use hyper::{
     },
 };
 use hyper_util::rt::TokioIo;
+use rand::{
+    RngExt,
+    distr::OpenClosed01,
+};
 use tokio::{
     net::TcpStream,
     time::sleep,
@@ -60,6 +64,8 @@ struct Args {
     keep_alive: bool,
     #[arg(long, default_value_t = 2)]
     header_count: usize,
+    #[arg(long, default_value_t = 0.0)]
+    think_time: f64,
     #[arg(long)]
     plain_output: bool,
 }
@@ -85,6 +91,7 @@ async fn worker(
     addr: SocketAddr,
     req_body_size: usize,
     keep_alive: bool,
+    think_time: f64,
     headers: Arc<Vec<(HeaderName, HeaderValue)>>,
 ) -> (Histogram<u64>, u64, u64) {
     let mut hist = Histogram::<u64>::new_with_bounds(1, HIST_UPPER_BOUND, 3).unwrap();
@@ -155,6 +162,13 @@ async fn worker(
                             let _ = hist.record(elapsed);
                         }
                         reqs += 1;
+
+                        if think_time > 0.0 {
+                            // https://docs.rs/rand/latest/rand/distr/struct.StandardUniform.html
+                            let u: f64 = rand::rng().sample(OpenClosed01);
+                            let wait = -think_time * u.ln();
+                            sleep(Duration::from_secs_f64(wait)).await;
+                        }
                     } else {
                         errs += 1;
                         sleep(Duration::from_millis(1)).await;
@@ -193,6 +207,7 @@ async fn run_phase(
             args.addr,
             args.req_body_size,
             args.keep_alive,
+            args.think_time,
             headers.clone(),
         )));
     }

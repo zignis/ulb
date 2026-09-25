@@ -11,4 +11,5 @@ hdrhistogram = "7.6.0"
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
+rand = { version = "0.10.3" }
 tokio = { workspace = true, features = ["full"] }
