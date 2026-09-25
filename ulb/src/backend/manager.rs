@@ -48,6 +48,7 @@ use crate::{
 
 // TODO: move this to config
 const MAX_RETRY_DURATION: u64 = 30; // seconds
+const CONNECT_BATCH_SIZE: usize = 1 << 6; // avoid tcp flood at backend for large pool sizes
 
 #[derive(Debug)]
 pub enum ManagerEvent {
@@ -114,8 +115,6 @@ impl BackendManager {
 
             for backend in &cluster_cfg.backends {
                 let addr = backend.addr;
-                let mut join_set = JoinSet::new();
-
                 let pool_idx = self.next_pool_idx;
                 self.next_pool_idx += 1;
                 conn_pools.push((pool_idx, backend.weight));
@@ -126,54 +125,67 @@ impl BackendManager {
                     rr_counter: 0,
                 };
 
-                for _ in 0..backend.pool_size {
-                    join_set.spawn(async move { TcpStream::connect(&addr).await });
-                }
+                info!(
+                    "[{addr}] setting up connection pool ({})",
+                    backend.pool_size
+                );
 
-                while let Some(join) = join_set.join_next().await {
-                    match join {
-                        Ok(Ok(stream)) => {
-                            match Self::register_backend(
-                                self.event_tx.clone(),
-                                &mut self.tasks,
-                                stream,
-                                idx as u32,
-                                pool_idx,
-                                addr,
-                                backend_map,
-                            ) {
-                                Ok(cookie) => {
-                                    if pool.connections.push(cookie).is_err() {
-                                        // this should never fail; pool limits are
-                                        // validated during config compilation
-                                        error!("infallible");
+                let mut remaining = backend.pool_size;
+
+                while remaining > 0 {
+                    let batch = remaining.min(CONNECT_BATCH_SIZE);
+                    remaining -= batch;
+
+                    let mut join_set = JoinSet::new();
+                    for _ in 0..batch {
+                        join_set.spawn(async move { TcpStream::connect(&addr).await });
+                    }
+
+                    while let Some(join) = join_set.join_next().await {
+                        match join {
+                            Ok(Ok(stream)) => {
+                                match Self::register_backend(
+                                    self.event_tx.clone(),
+                                    &mut self.tasks,
+                                    stream,
+                                    idx as u32,
+                                    pool_idx,
+                                    addr,
+                                    backend_map,
+                                ) {
+                                    Ok(cookie) => {
+                                        if pool.connections.push(cookie).is_err() {
+                                            // this should never fail; pool limits are
+                                            // validated during config compilation
+                                            error!("infallible");
+                                        }
                                     }
+
+                                    Err(err) => error!("failed to register backend: {err}"),
                                 }
-
-                                Err(err) => error!("failed to register backend: {err}"),
                             }
-                        }
 
-                        Ok(Err(err)) => {
-                            error!("failed to connect to backend {addr}: {err}");
-                            // TODO: max reconnect attempt limit
-                            let _ = self.event_tx.send(ManagerEvent::Disconnect {
-                                cluster_idx: idx as u32,
-                                pool_idx,
-                                addr,
-                                old_cookie: None,
-                            });
-                        }
+                            Ok(Err(err)) => {
+                                error!("failed to connect to backend {addr}: {err}");
+                                // TODO: max reconnect attempt limit
+                                let _ = self.event_tx.send(ManagerEvent::Disconnect {
+                                    cluster_idx: idx as u32,
+                                    pool_idx,
+                                    addr,
+                                    old_cookie: None,
+                                });
+                            }
 
-                        Err(err) => {
-                            error!("join error for {addr}: {err}");
+                            Err(err) => {
+                                error!("join error for {addr}: {err}");
+                            }
                         }
                     }
                 }
 
                 if pool.connections.len > 0 {
                     info!(
-                        "setup {} connections to backend: {addr}",
+                        "[{addr}] setup {} connections to backend",
                         pool.connections.len
                     );
                 }
@@ -350,7 +362,7 @@ impl BackendManager {
             loop {
                 match stream.read(&mut buf).await {
                     Ok(0) | Err(_) => {
-                        info!("connection closed for {addr}");
+                        info!("[{addr}] connection closed");
 
                         // TODO: add max reconnect attempt limit if it was an error response
                         // ; maybe an error counter to stop reconnecting when it overflows
