@@ -1,10 +1,9 @@
-#[cfg(target_os = "linux")]
 use core::ffi::c_void;
-#[cfg(target_os = "linux")]
-use std::io::Error;
-use std::os::fd::RawFd;
+use std::{
+    io::Error,
+    os::fd::RawFd,
+};
 
-#[cfg(target_os = "linux")]
 use libc::{
     SO_COOKIE,
     SOL_SOCKET,
@@ -13,7 +12,6 @@ use libc::{
 };
 use ulb_common::session::SocketCookie;
 
-#[cfg(target_os = "linux")]
 pub fn get_socket_cookie(fd: RawFd) -> anyhow::Result<SocketCookie> {
     let mut cookie: SocketCookie = 0;
     let mut optlen = size_of::<SocketCookie>() as socklen_t;
@@ -35,9 +33,4 @@ pub fn get_socket_cookie(fd: RawFd) -> anyhow::Result<SocketCookie> {
     } else {
         Ok(cookie)
     }
-}
-
-#[cfg(not(target_os = "linux"))]
-pub fn get_socket_cookie(_fd: RawFd) -> anyhow::Result<SocketCookie> {
-    compile_error!("SO_COOKIE is only available on Linux");
 }
