@@ -1,5 +1,7 @@
 #![cfg(target_os = "linux")]
 
+use std::sync::Arc;
+
 use clap::Parser;
 use libc::{
     RLIM_INFINITY,
