@@ -30,12 +30,15 @@ use ulb::{
     telemetry,
 };
 
+const DEFAULT_CONFIG_PATH: &str = "/etc/ulb/ulb.yaml";
+const DEFAULT_CGROUP_PATH: &str = "/sys/fs/cgroup";
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "/etc/ulb/ulb.yaml")]
+    #[arg(long, default_value = DEFAULT_CONFIG_PATH)]
     config: String,
-    #[arg(long, default_value = "/sys/fs/cgroup")]
+    #[arg(long, default_value = DEFAULT_CGROUP_PATH)]
     cgroup: String,
 }
 
