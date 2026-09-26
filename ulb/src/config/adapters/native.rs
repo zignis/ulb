@@ -1,7 +1,4 @@
-use anyhow::{
-    Context,
-    Result,
-};
+use anyhow::Context;
 
 use crate::config::{
     adapters::ConfigAdapter,
@@ -11,7 +8,7 @@ use crate::config::{
 pub struct NativeAdapter;
 
 impl ConfigAdapter for NativeAdapter {
-    fn parse(content: String) -> Result<UlbConfig> {
+    fn parse(content: String) -> anyhow::Result<UlbConfig> {
         yaml_serde::from_str(&content).context("failed to parse config file")
     }
 }
