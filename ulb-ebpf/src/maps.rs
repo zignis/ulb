@@ -1,6 +1,5 @@
 use aya_ebpf::{
     bindings::{
-        BPF_F_RDONLY,
         BPF_F_RDONLY_PROG,
         BPF_F_WRONLY,
         BPF_F_WRONLY_PROG,
@@ -108,7 +107,7 @@ pub static BACKEND_CONNECTION_POOL_TABLE: ArrayOfMaps<
 
 #[map]
 pub static BACKEND_CONNECTION_POOL_STATS_TABLE: Array<BackendConnectionPoolStats> =
-    Array::with_max_entries(MAX_BACKEND_CONNECTION_POOLS, BPF_F_RDONLY);
+    Array::with_max_entries(MAX_BACKEND_CONNECTION_POOLS, 0);
 
 //
 
