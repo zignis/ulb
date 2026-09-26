@@ -15,6 +15,15 @@
         "$ref": "#/$defs/ListenerConfig"
       }
     },
+    "max_resident_connections": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "default": null,
+      "minimum": 0
+    },
     "rlimit_nofile": {
       "type": [
         "integer",
@@ -40,7 +49,7 @@
         "pool_size": {
           "type": "integer",
           "format": "uint",
-          "default": 1024,
+          "default": 65536,
           "minimum": 0
         },
         "weight": {
