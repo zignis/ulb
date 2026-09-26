@@ -5,6 +5,7 @@ rlimit_nofile: 1048576
 listeners:
   - name: simple_routing
     addr: 0.0.0.0:8085
+    backlog: 65536
     hosts:
       - host: bench.local
         routes:
@@ -16,6 +17,7 @@ listeners:
 
   - name: deep_headers
     addr: 0.0.0.0:8086
+    backlog: 65536
     hosts:
       - host: bench.local
         routes:
