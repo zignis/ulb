@@ -54,7 +54,7 @@ use ulb_common::{
 };
 
 #[map]
-pub static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COUNT, BPF_F_WRONLY);
+pub static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COUNT, 0);
 
 //
 
@@ -66,7 +66,7 @@ pub static HTTP_REQ_BUF: PerCpuArray<HttpRequest> = PerCpuArray::with_max_entrie
 
 #[map]
 pub static BACKEND_CONNECTION_MAP: SockHash<SocketCookie> =
-    SockHash::with_max_entries(MAX_BACKEND_CONNECTIONS, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
+    SockHash::with_max_entries(MAX_BACKEND_CONNECTIONS, 0);
 
 #[map]
 pub static CLIENT_CONNECTION_MAP: SockHash<SocketCookie> =
@@ -89,8 +89,7 @@ pub static ROUTE_TABLE: Array<RouteValue> =
     Array::with_max_entries(MAX_ROUTES, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
 
 #[map]
-pub static CLUSTER_TABLE: Array<Cluster> =
-    Array::with_max_entries(MAX_CLUSTERS, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
+pub static CLUSTER_TABLE: Array<Cluster> = Array::with_max_entries(MAX_CLUSTERS, BPF_F_WRONLY);
 
 #[map]
 pub static HEADER_RULE_TABLE: Array<HeaderRule> =
