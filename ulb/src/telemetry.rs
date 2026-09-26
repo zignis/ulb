@@ -1,6 +1,8 @@
 use std::{
+    borrow::Cow,
     cell::Cell,
     io::Write,
+    sync::OnceLock,
 };
 
 use anstyle::{
@@ -9,7 +11,14 @@ use anstyle::{
     Style,
 };
 use env_logger::Builder;
+use indicatif::{
+    MultiProgress,
+    ProgressStyle,
+};
+use indicatif_log_bridge::LogWrapper;
 use log::Level;
+
+pub static TLM_MULTI_PROGRESS: OnceLock<MultiProgress> = OnceLock::new();
 
 thread_local! {
     static IS_BPF_LOG_CTX: Cell<bool> = const{ Cell::new(false) };
@@ -88,8 +97,8 @@ fn get_style(level: Level, is_error: bool, is_kernel: bool) -> Style {
     }
 }
 
-pub fn init() {
-    Builder::from_default_env()
+pub fn init(fancy: bool) {
+    let logger = Builder::from_default_env()
         .format(|buf, record| {
             let target = record.target();
             let module = target.split("::").last().unwrap_or(target);
@@ -112,5 +121,70 @@ pub fn init() {
                 remainder
             )
         })
-        .init();
+        .build();
+
+    let max_level = logger.filter();
+
+    if fancy {
+        let multi = MultiProgress::new();
+        LogWrapper::new(multi.clone(), logger)
+            .try_init()
+            .expect("failed to set logger");
+
+        TLM_MULTI_PROGRESS
+            .set(multi)
+            .expect("failed to set multi progress");
+    } else {
+        log::set_boxed_logger(Box::new(logger)).expect("failed to set logger");
+    }
+
+    log::set_max_level(max_level);
+}
+
+//
+
+pub struct ProgressBar(Option<indicatif::ProgressBar>);
+
+impl ProgressBar {
+    pub fn new<M>(size: u64, msg: M) -> Self
+    where
+        M: Into<Cow<'static, str>>,
+    {
+        match TLM_MULTI_PROGRESS.get() {
+            Some(multi) => {
+                let pb = multi.add(indicatif::ProgressBar::new(size));
+                pb.set_style(
+                    ProgressStyle::with_template(
+                        "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
+                    )
+                    .expect("template failed")
+                    .progress_chars("##-"),
+                );
+                pb.set_message(msg);
+
+                Self(Some(pb))
+            }
+
+            None => Self(None),
+        }
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub fn inc(&self) {
+        if let Some(pb) = &self.0 {
+            pb.inc(1);
+        }
+    }
+
+    pub fn finish<M>(&self, msg: M)
+    where
+        M: Into<Cow<'static, str>>,
+    {
+        if let Some(pb) = &self.0 {
+            pb.finish_with_message(msg);
+        }
+    }
 }

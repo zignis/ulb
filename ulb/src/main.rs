@@ -40,12 +40,14 @@ struct Args {
     config: String,
     #[arg(long, default_value = DEFAULT_CGROUP_PATH)]
     cgroup: String,
+    #[arg(long)]
+    no_fancy: bool,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    telemetry::init();
+    telemetry::init(!args.no_fancy);
 
     if !log_enabled!(Level::Info) {
         println!("RUST_LOG: info level logging is not enabled");
