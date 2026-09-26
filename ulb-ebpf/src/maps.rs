@@ -1,4 +1,10 @@
 use aya_ebpf::{
+    bindings::{
+        BPF_F_RDONLY,
+        BPF_F_RDONLY_PROG,
+        BPF_F_WRONLY,
+        BPF_F_WRONLY_PROG,
+    },
     btf_maps::{
         Queue,
         of_maps::ArrayOfMaps,
@@ -48,7 +54,7 @@ use ulb_common::{
 };
 
 #[map]
-pub static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COUNT, 0);
+pub static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COUNT, BPF_F_WRONLY);
 
 //
 
@@ -60,7 +66,7 @@ pub static HTTP_REQ_BUF: PerCpuArray<HttpRequest> = PerCpuArray::with_max_entrie
 
 #[map]
 pub static BACKEND_CONNECTION_MAP: SockHash<SocketCookie> =
-    SockHash::with_max_entries(MAX_BACKEND_CONNECTIONS, 0);
+    SockHash::with_max_entries(MAX_BACKEND_CONNECTIONS, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
 
 #[map]
 pub static CLIENT_CONNECTION_MAP: SockHash<SocketCookie> =
@@ -72,24 +78,28 @@ pub static SESSION_MAP: HashMap<SocketCookie, SessionTarget> =
 
 #[map]
 pub static RESIDUAL_CONNECTION_MAP: HashMap<SocketCookie, ResidentTarget> =
-    HashMap::with_max_entries(DEFAULT_MAX_RESIDENT_CONNECTIONS, 0);
+    HashMap::with_max_entries(DEFAULT_MAX_RESIDENT_CONNECTIONS, BPF_F_WRONLY_PROG);
 
 #[map]
-pub static VHOST_MAP: HashMap<VHostKey, VHostValue> = HashMap::with_max_entries(MAX_VHOSTS, 0);
+pub static VHOST_MAP: HashMap<VHostKey, VHostValue> =
+    HashMap::with_max_entries(MAX_VHOSTS, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
 
 #[map]
-pub static ROUTE_TABLE: Array<RouteValue> = Array::with_max_entries(MAX_ROUTES, 0);
+pub static ROUTE_TABLE: Array<RouteValue> =
+    Array::with_max_entries(MAX_ROUTES, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
 
 #[map]
-pub static CLUSTER_TABLE: Array<Cluster> = Array::with_max_entries(MAX_CLUSTERS, 0);
+pub static CLUSTER_TABLE: Array<Cluster> =
+    Array::with_max_entries(MAX_CLUSTERS, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
 
 #[map]
-pub static HEADER_RULE_TABLE: Array<HeaderRule> = Array::with_max_entries(MAX_HEADER_RULES, 0);
+pub static HEADER_RULE_TABLE: Array<HeaderRule> =
+    Array::with_max_entries(MAX_HEADER_RULES, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
 
 /// {key name, index into HEADER_RULE_TABLE}
 #[map]
 pub static HEADER_KEY_MAP: HashMap<[u8; HTTP_HDR_KEY_MAX_LEN], u64> =
-    HashMap::with_max_entries(MAX_HEADER_RULES, 0);
+    HashMap::with_max_entries(MAX_HEADER_RULES, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
 
 #[btf_map]
 pub static BACKEND_CONNECTION_POOL_TABLE: ArrayOfMaps<
@@ -99,9 +109,10 @@ pub static BACKEND_CONNECTION_POOL_TABLE: ArrayOfMaps<
 
 #[map]
 pub static BACKEND_CONNECTION_POOL_STATS_TABLE: Array<BackendConnectionPoolStats> =
-    Array::with_max_entries(MAX_BACKEND_CONNECTION_POOLS, 0);
+    Array::with_max_entries(MAX_BACKEND_CONNECTION_POOLS, BPF_F_RDONLY);
 
 //
 
 #[map]
-pub static LISTENER_PORTS: Array<u8> = Array::with_max_entries(MAX_TCP_PORTS, 0);
+pub static LISTENER_PORTS: Array<u8> =
+    Array::with_max_entries(MAX_TCP_PORTS, BPF_F_WRONLY | BPF_F_RDONLY_PROG);
