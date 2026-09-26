@@ -16,7 +16,8 @@ pub const MAX_SESSIONS: u32 = MAX_CLIENT_CONNECTIONS * 2; // maximum client-back
 pub const DEFAULT_MAX_RESIDENT_CONNECTIONS: u32 = 1 << 10;
 
 pub const MAX_TCP_PORTS: u32 = 1 << 16;
-pub const LISTEN_BACKLOG_QUEUE_SIZE: u32 = 1 << 10; // listener socket queue size
+pub const MAX_LISTEN_BACKLOG_QUEUE_SIZE: u32 = 1 << 16;
+pub const DEFAULT_LISTEN_BACKLOG_QUEUE_SIZE: u32 = 1 << 10; // for listen() syscall
 pub const DEFAULT_BACKEND_WEIGHT: u32 = 1;
 
 mod cluster;

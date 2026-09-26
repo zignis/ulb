@@ -18,6 +18,7 @@ use ulb_common::ir::{
     MAX_BACKENDS_PER_CLUSTER,
     MAX_CLUSTERS,
     MAX_HEADER_RULES_PER_ROUTE,
+    MAX_LISTEN_BACKLOG_QUEUE_SIZE,
     MAX_LISTENERS,
     MAX_VHOSTS,
 };
@@ -59,6 +60,16 @@ fn validate_config(cfg: UlbConfig) -> anyhow::Result<UlbConfig> {
     let mut listener_addrs = HashSet::new();
 
     for listener in &cfg.listeners {
+        if listener
+            .backlog
+            .is_some_and(|backlog| backlog > MAX_LISTEN_BACKLOG_QUEUE_SIZE)
+        {
+            bail!(
+                "exceeded maximum backlog size ({}/{MAX_LISTEN_BACKLOG_QUEUE_SIZE})",
+                listener.backlog.unwrap_or_default()
+            );
+        }
+
         if !listener_addrs.insert(listener.addr) {
             bail!("unexpected duplicate listener: `{}`", listener.addr);
         }

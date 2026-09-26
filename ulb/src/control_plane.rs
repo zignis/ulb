@@ -29,7 +29,7 @@ use tokio_util::{
     sync::CancellationToken,
     task::TaskTracker,
 };
-use ulb_common::ir::LISTEN_BACKLOG_QUEUE_SIZE;
+use ulb_common::ir::DEFAULT_LISTEN_BACKLOG_QUEUE_SIZE;
 
 use crate::{
     bpf_bootstrap::ResidualConnectionMap,
@@ -73,9 +73,12 @@ impl ControlPlane {
 
         for listener_cfg in &cfg.listeners {
             let addr = listener_cfg.addr;
+            let backlog = listener_cfg
+                .backlog
+                .unwrap_or(DEFAULT_LISTEN_BACKLOG_QUEUE_SIZE);
 
             for _ in 0..num_cores {
-                let listener = bind_port(addr)?;
+                let listener = bind_port(addr, backlog)?;
                 let shutdown_token = self.shutdown_token.clone();
                 let residual_connection_map = self.residual_connection_map.clone();
                 let clusters = self.clusters.clone();
@@ -197,7 +200,7 @@ fn handle_connection(
     });
 }
 
-fn bind_port(addr: SocketAddr) -> anyhow::Result<TcpListener> {
+fn bind_port(addr: SocketAddr, backlog: u32) -> anyhow::Result<TcpListener> {
     let socket = if addr.is_ipv4() {
         TcpSocket::new_v4()?
     } else {
@@ -210,8 +213,7 @@ fn bind_port(addr: SocketAddr) -> anyhow::Result<TcpListener> {
     socket
         .bind(addr)
         .map_err(|err| anyhow!("failed to bind {addr}: {err}"))?;
-
     socket
-        .listen(LISTEN_BACKLOG_QUEUE_SIZE)
+        .listen(backlog)
         .map_err(|err| anyhow!("failed to listen on {addr}: {err}"))
 }

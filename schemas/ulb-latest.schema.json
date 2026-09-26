@@ -134,6 +134,14 @@
         "addr": {
           "type": "string"
         },
+        "backlog": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "hosts": {
           "type": "array",
           "items": {

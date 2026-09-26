@@ -15,5 +15,6 @@ use crate::config::canonical::VHostConfig;
 pub struct ListenerConfig {
     pub name: String,
     pub addr: SocketAddr,
+    pub backlog: Option<u32>,
     pub hosts: Vec<VHostConfig>,
 }
