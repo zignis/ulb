@@ -1,13 +1,27 @@
+use core::ffi::{
+    c_long,
+    c_void,
+};
+
 use aya_ebpf::{
-    bindings::BPF_NOEXIST,
-    helpers::bpf_get_prandom_u32,
+    bindings::{
+        BPF_EXIST,
+        BPF_NOEXIST,
+    },
+    btf_maps::Queue,
+    helpers::{
+        bpf_get_prandom_u32,
+        bpf_loop,
+    },
     programs::SkBuffContext,
 };
 use ulb_common::{
     containers::BoundedVec,
     ir::{
         Backend,
+        Cluster,
         LoadBalancingPolicy,
+        MAX_BACKEND_CONNECTION_POOL_SIZE,
         MAX_BACKENDS_PER_CLUSTER,
     },
     session::{
@@ -17,13 +31,21 @@ use ulb_common::{
 };
 
 use crate::{
+    BPF_LOOP_NEXT,
+    BPF_LOOP_STOP,
     debug,
+    error,
     maps::{
+        BACKEND_CONNECTION_MAP,
+        BACKEND_CONNECTION_POOL_STATS_TABLE,
         BACKEND_CONNECTION_POOL_TABLE,
         CLUSTER_TABLE,
         SESSION_MAP,
     },
-    utils::atomic_add_u64,
+    utils::{
+        bpf_map_exists_key,
+        incr_pool_active_connections,
+    },
     warn,
 };
 
@@ -33,77 +55,149 @@ const AF_INET: u32 = 2;
 /// https://github.com/torvalds/linux/blob/587858367581b9c55c3690f4e63382ad622719d4/include/linux/socket.h#L215
 const AF_INET6: u32 = 10;
 
-const MAX_BACKEND_SELECT_ATTEMPTS: u32 = 8;
-const MAX_CONNECTION_SELECT_ATTEMPTS: u32 = 4;
+pub enum ResolveBackendError {
+    PoolExhausted { backend_idx: u32 },
+    Internal,
+}
 
-#[inline(always)]
-fn claim_connection(
-    ctx: &SkBuffContext,
+struct SessionCtx<'a> {
+    skb_ctx: &'a SkBuffContext,
     pool_idx: u32,
     client_cookie: SocketCookie,
     update_active_connections: bool,
-) -> Option<SocketCookie> {
-    let pool = BACKEND_CONNECTION_POOL_TABLE.get_ptr_mut(pool_idx)?;
-    let pool_len = unsafe { (*pool).connections.len };
+    queue: &'a Queue<SocketCookie, MAX_BACKEND_CONNECTION_POOL_SIZE>,
+    created: Option<SocketCookie>,
+}
 
-    if pool_len == 0 {
-        return None;
+extern "C" fn create_session(_idx: u32, ctx: *mut c_void) -> c_long {
+    let ctx = unsafe { &mut *(ctx as *mut SessionCtx) };
+    let cookie = match ctx.queue.pop().ok().flatten() {
+        Some(x) => x,
+        None => return BPF_LOOP_STOP,
+    };
+
+    if !bpf_map_exists_key(
+        &BACKEND_CONNECTION_MAP as *const _ as *mut c_void,
+        &cookie as *const _ as *const c_void,
+    ) {
+        return BPF_LOOP_NEXT; // dead connection; discard cookie
     }
 
-    // intentionally avoid atomic operation for this counter (eventual consistency
-    // is maintained)
-    let counter = unsafe { &mut (*pool).rr_counter };
-    let start_idx = *counter % pool_len;
-    *counter = counter.wrapping_add(1);
-
-    // search for idle connection in pool
-    for i in 0..MAX_CONNECTION_SELECT_ATTEMPTS as u64 {
-        let cookie_idx = (start_idx + i) % pool_len;
-        let cookie = unsafe { (*pool).connections.data.get(cookie_idx as usize) }?;
-
-        if SESSION_MAP
-            .insert(
-                cookie,
-                SessionTarget::new(client_cookie, pool_idx, update_active_connections),
-                BPF_NOEXIST as u64, // atomically claim the backend socket for this client
-            )
-            .is_ok()
-        {
-            if update_active_connections {
-                unsafe {
-                    atomic_add_u64(&raw mut (*pool).active_connections, 1);
-                }
-            }
-
-            debug!(
-                ctx,
-                "[D:3] claimed backend (CK:{}) from pool {}", *cookie, pool_idx
-            );
-
-            return Some(*cookie);
+    if SESSION_MAP
+        .insert(
+            cookie,
+            SessionTarget::new(
+                ctx.client_cookie,
+                ctx.pool_idx,
+                ctx.update_active_connections,
+                false,
+            ),
+            BPF_NOEXIST as u64, // atomically claim the backend socket for this client
+        )
+        .is_ok()
+    {
+        if ctx.update_active_connections {
+            incr_pool_active_connections(ctx.pool_idx);
         }
+
+        debug!(
+            ctx.skb_ctx,
+            "[D:3] claimed backend (CK:{}) from pool {}", cookie, ctx.pool_idx
+        );
+
+        ctx.created = Some(cookie);
+        return BPF_LOOP_STOP;
     }
 
-    None
+    // put back in queue if insert failed
+    #[allow(unused_variables)]
+    if let Err(eno) = ctx.queue.push(cookie, BPF_EXIST as u64) {
+        error!(ctx.skb_ctx, "[E:3] failed to push to queue: {}", eno);
+    }
+
+    BPF_LOOP_NEXT
+}
+
+//
+
+struct SelectBackendCtx<'a> {
+    skb_ctx: &'a SkBuffContext,
+    cluster: *mut Cluster,
+    backend_idx: u32,
+    client_cookie: SocketCookie,
+    update_active_connections: bool,
+    selected: Option<(SocketCookie, u32)>,
+}
+
+extern "C" fn select_backend(itr: u32, ctx: *mut c_void) -> c_long {
+    let ctx = unsafe { &mut *(ctx as *mut SelectBackendCtx) };
+    let len = unsafe { (*ctx.cluster).backends.len } as u32;
+
+    if len == 0 {
+        return BPF_LOOP_STOP;
+    }
+
+    let idx = (ctx.backend_idx + itr) % len;
+    let backend = match unsafe { (*ctx.cluster).backends.data.get(idx as usize) } {
+        Some(x) => x,
+        None => return BPF_LOOP_STOP,
+    };
+
+    let queue = match BACKEND_CONNECTION_POOL_TABLE.get(backend.pool_idx) {
+        Some(x) => x,
+        None => return BPF_LOOP_STOP,
+    };
+
+    let mut session_ctx = SessionCtx {
+        skb_ctx: ctx.skb_ctx,
+        pool_idx: backend.pool_idx,
+        client_cookie: ctx.client_cookie,
+        update_active_connections: ctx.update_active_connections,
+        queue,
+        created: None,
+    };
+
+    let session_ret = unsafe {
+        bpf_loop(
+            MAX_BACKEND_CONNECTION_POOL_SIZE as u32,
+            create_session as *mut c_void,
+            &mut session_ctx as *mut SessionCtx as *mut c_void,
+            0,
+        )
+    };
+
+    if session_ret < 0 {
+        return BPF_LOOP_STOP;
+    }
+
+    if let Some(cookie) = session_ctx.created {
+        ctx.selected = Some((cookie, backend.pool_idx));
+        return BPF_LOOP_STOP;
+    }
+
+    BPF_LOOP_NEXT
 }
 
 #[inline(always)]
-pub fn select_backend(
+pub fn resolve_backend(
     ctx: &SkBuffContext,
     cluster_idx: u32,
     client_cookie: SocketCookie,
-) -> Option<(SocketCookie, u32, bool)> {
-    let cluster = CLUSTER_TABLE.get_ptr_mut(cluster_idx)?;
+) -> Result<(SocketCookie, u32, bool), ResolveBackendError> {
+    let cluster = match CLUSTER_TABLE.get_ptr_mut(cluster_idx) {
+        Some(x) => x,
+        None => return Err(ResolveBackendError::Internal),
+    };
     let len = unsafe { (*cluster).backends.len } as u32;
     let mut update_active_connections = false;
 
     debug!(ctx, "[D:3] cluster {} has {} backends", cluster_idx, len);
 
     if len == 0 {
-        return None;
+        return Err(ResolveBackendError::Internal);
     }
 
-    let start_idx = match unsafe { (*cluster).policy } {
+    let backend_idx = match unsafe { (*cluster).policy } {
         LoadBalancingPolicy::Random => unsafe { bpf_get_prandom_u32() % len },
 
         LoadBalancingPolicy::IpHash => {
@@ -122,9 +216,9 @@ pub fn select_backend(
         LoadBalancingPolicy::RoundRobin => {
             if unsafe { (*cluster).uniform_weight } == 1 {
                 let counter = unsafe { &mut (*cluster).rr_counter };
-                let start_idx = *counter % len;
+                let backend_idx = *counter % len;
                 *counter = counter.wrapping_add(1);
-                start_idx
+                backend_idx
             } else {
                 let counter = unsafe { &mut (*cluster).rr_counter };
                 let target = *counter % unsafe { (*cluster).total_weight }.max(1);
@@ -148,7 +242,7 @@ pub fn select_backend(
                     idx += 1;
                 }
 
-                idx as u32
+                idx.min((len as usize).saturating_sub(1)) as u32
             }
         }
 
@@ -185,27 +279,35 @@ pub fn select_backend(
         }
     };
 
-    // search for idle backends
-    for i in 0..MAX_BACKEND_SELECT_ATTEMPTS {
-        let idx = (start_idx + i) % len;
+    let mut backend_ctx = SelectBackendCtx {
+        skb_ctx: ctx,
+        cluster,
+        backend_idx,
+        client_cookie,
+        update_active_connections,
+        selected: None,
+    };
 
-        if let Some(backend) = unsafe { (*cluster).backends.data.get(idx as usize) }
-            && let Some(cookie) = claim_connection(
-                ctx,
-                backend.pool_idx,
-                client_cookie,
-                update_active_connections,
-            )
-        {
-            return Some((cookie, backend.pool_idx, update_active_connections));
-        }
+    let backend_ret = unsafe {
+        bpf_loop(
+            MAX_BACKENDS_PER_CLUSTER as u32,
+            select_backend as *mut c_void,
+            &mut backend_ctx as *mut SelectBackendCtx as *mut c_void,
+            0,
+        )
+    };
+
+    if backend_ret < 0 {
+        return Err(ResolveBackendError::Internal);
     }
 
-    warn!(ctx, "[E:3] no backend available");
+    if let Some((cookie, pool_idx)) = backend_ctx.selected {
+        return Ok((cookie, pool_idx, update_active_connections));
+    }
 
-    // TODO(future): fallback to userspace proxy when no backend are available
+    warn!(ctx, "[E:3] no backend available, adding to resident queue");
 
-    None
+    Err(ResolveBackendError::PoolExhausted { backend_idx })
 }
 
 #[inline(always)]
@@ -222,7 +324,7 @@ fn get_backend_stats(
         None => return (u64::MAX, 1),
     };
     let weight = backend.weight as u64;
-    let active = match BACKEND_CONNECTION_POOL_TABLE.get_ptr(backend.pool_idx) {
+    let active = match BACKEND_CONNECTION_POOL_STATS_TABLE.get_ptr(backend.pool_idx) {
         Some(pool) => unsafe { (*pool).active_connections },
         None => u64::MAX,
     };

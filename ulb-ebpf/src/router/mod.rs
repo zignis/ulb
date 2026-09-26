@@ -1,5 +1,11 @@
 use aya_ebpf::{
-    bindings::sk_action::SK_DROP,
+    bindings::{
+        BPF_EXIST,
+        sk_action::{
+            SK_DROP,
+            SK_PASS,
+        },
+    },
     cty::c_void,
     helpers::bpf_get_socket_cookie,
     programs::SkBuffContext,
@@ -7,6 +13,7 @@ use aya_ebpf::{
 use ulb_common::{
     ir::ROUTE_ACTION_DROP,
     session::{
+        ResidentTarget,
         SessionTarget,
         SocketCookie,
     },
@@ -18,10 +25,15 @@ use crate::{
     error,
     maps::{
         BACKEND_CONNECTION_MAP,
+        BACKEND_CONNECTION_POOL_TABLE,
+        RESIDUAL_CONNECTION_MAP,
         SESSION_MAP,
     },
     router::{
-        cluster::select_backend,
+        cluster::{
+            ResolveBackendError,
+            resolve_backend,
+        },
         route::{
             RouteError,
             match_route,
@@ -34,6 +46,7 @@ use crate::{
         HTTP_405_METHOD_NOT_ALLOWED,
         HTTP_500_INTERNAL_SERVER_ERROR,
         HTTP_503_SERVICE_UNAVAILABLE,
+        decr_pool_active_connections,
         get_http_buf,
         remove_session_mapping,
         send_client_response,
@@ -83,16 +96,34 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
             let client_cookie =
                 unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) } as SocketCookie;
 
-            let Some((mut backend_cookie, pool_idx, update_active_connections)) =
-                select_backend(ctx, cluster_idx, client_cookie)
-            else {
-                return send_client_response(ctx, HTTP_503_SERVICE_UNAVAILABLE);
-            };
+            let (mut backend_cookie, pool_idx, update_active_connections) =
+                match resolve_backend(ctx, cluster_idx, client_cookie) {
+                    Ok(x) => x,
+
+                    Err(ResolveBackendError::PoolExhausted { backend_idx }) => {
+                        if RESIDUAL_CONNECTION_MAP
+                            .insert(
+                                client_cookie,
+                                ResidentTarget::new(cluster_idx, backend_idx),
+                                0,
+                            )
+                            .is_err()
+                        {
+                            return send_client_response(ctx, HTTP_503_SERVICE_UNAVAILABLE); // map overflow
+                        }
+
+                        debug!(&ctx, "[D:2] request handed off to userspace");
+
+                        return SK_PASS;
+                    }
+
+                    _ => return send_client_response(ctx, HTTP_503_SERVICE_UNAVAILABLE),
+                };
 
             #[allow(unused_variables)]
             if let Err(eno) = SESSION_MAP.insert(
                 client_cookie,
-                SessionTarget::new(backend_cookie, pool_idx, update_active_connections),
+                SessionTarget::new(backend_cookie, pool_idx, update_active_connections, true),
                 0,
             ) {
                 error!(
@@ -100,16 +131,27 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
                     "[E:2] failed to insert client->backend session ({})", eno
                 );
 
+                if update_active_connections {
+                    decr_pool_active_connections(pool_idx);
+                }
+
+                if let Some(queue) = BACKEND_CONNECTION_POOL_TABLE.get(pool_idx) {
+                    // TODO: error handling
+                    let _ = queue.push(backend_cookie, BPF_EXIST as u64);
+                }
+
                 let _ = SESSION_MAP.remove(backend_cookie); // remove mapping inserted by select_backend
                 return send_client_response(ctx, HTTP_500_INTERNAL_SERVER_ERROR);
             }
 
             let ret = BACKEND_CONNECTION_MAP.redirect_skb(ctx, &mut backend_cookie, BPF_SKB_EGRESS)
                 as u32;
+
             if ret == SK_DROP {
                 debug!(&ctx, "[E:2] redirect failure; removing session");
-                remove_session_mapping(&client_cookie);
+                remove_session_mapping(&client_cookie, false);
             }
+
             ret
         }
     }

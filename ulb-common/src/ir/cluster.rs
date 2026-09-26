@@ -8,11 +8,7 @@ use serde::{
 
 use crate::{
     containers::BoundedVec,
-    ir::{
-        MAX_BACKEND_CONNECTION_POOL_SIZE,
-        MAX_BACKENDS_PER_CLUSTER,
-    },
-    session::SocketCookie,
+    ir::MAX_BACKENDS_PER_CLUSTER,
 };
 
 #[repr(C)]
@@ -50,12 +46,8 @@ pub struct Backend {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct BackendConnectionPool {
-    // 8B align
-    pub connections: BoundedVec<SocketCookie, MAX_BACKEND_CONNECTION_POOL_SIZE>,
-    // 8B align
-    pub rr_counter: u64, // round-robin counter
+#[derive(Debug, Copy, Clone, Default)]
+pub struct BackendConnectionPoolStats {
     // 8B align
     pub active_connections: u64, // used for least-loaded policy
 }
@@ -70,4 +62,4 @@ unsafe impl aya::Pod for LoadBalancingPolicy {}
 unsafe impl aya::Pod for Backend {}
 
 #[cfg(feature = "user")]
-unsafe impl aya::Pod for BackendConnectionPool {}
+unsafe impl aya::Pod for BackendConnectionPoolStats {}

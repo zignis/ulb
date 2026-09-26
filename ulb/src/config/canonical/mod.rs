@@ -34,6 +34,8 @@ pub type ClusterIdxMap = HashMap<String, u32>;
 pub struct UlbConfig {
     #[serde(default)]
     pub rlimit_nofile: Option<u64>,
+    #[serde(default)]
+    pub max_resident_connections: Option<u32>,
     pub listeners: Vec<ListenerConfig>,
     pub clusters: Vec<ClusterConfig>,
 }

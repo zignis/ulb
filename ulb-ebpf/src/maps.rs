@@ -1,5 +1,12 @@
 use aya_ebpf::{
-    macros::map,
+    btf_maps::{
+        Queue,
+        of_maps::ArrayOfMaps,
+    },
+    macros::{
+        btf_map,
+        map,
+    },
     maps::{
         Array,
         HashMap,
@@ -15,9 +22,11 @@ use ulb_common::{
         HttpRequest,
     },
     ir::{
-        BackendConnectionPool,
+        BackendConnectionPoolStats,
         Cluster,
+        DEFAULT_MAX_RESIDENT_CONNECTIONS,
         HeaderRule,
+        MAX_BACKEND_CONNECTION_POOL_SIZE,
         MAX_BACKEND_CONNECTION_POOLS,
         MAX_BACKEND_CONNECTIONS,
         MAX_CLIENT_CONNECTIONS,
@@ -32,6 +41,7 @@ use ulb_common::{
         VHostValue,
     },
     session::{
+        ResidentTarget,
         SessionTarget,
         SocketCookie,
     },
@@ -61,6 +71,10 @@ pub static SESSION_MAP: HashMap<SocketCookie, SessionTarget> =
     HashMap::with_max_entries(MAX_SESSIONS, 0);
 
 #[map]
+pub static RESIDUAL_CONNECTION_MAP: HashMap<SocketCookie, ResidentTarget> =
+    HashMap::with_max_entries(DEFAULT_MAX_RESIDENT_CONNECTIONS, 0);
+
+#[map]
 pub static VHOST_MAP: HashMap<VHostKey, VHostValue> = HashMap::with_max_entries(MAX_VHOSTS, 0);
 
 #[map]
@@ -77,8 +91,14 @@ pub static HEADER_RULE_TABLE: Array<HeaderRule> = Array::with_max_entries(MAX_HE
 pub static HEADER_KEY_MAP: HashMap<[u8; HTTP_HDR_KEY_MAX_LEN], u64> =
     HashMap::with_max_entries(MAX_HEADER_RULES, 0);
 
+#[btf_map]
+pub static BACKEND_CONNECTION_POOL_TABLE: ArrayOfMaps<
+    Queue<SocketCookie, MAX_BACKEND_CONNECTION_POOL_SIZE>,
+    { MAX_BACKEND_CONNECTION_POOLS as usize },
+> = ArrayOfMaps::new();
+
 #[map]
-pub static BACKEND_CONNECTION_POOL_TABLE: Array<BackendConnectionPool> =
+pub static BACKEND_CONNECTION_POOL_STATS_TABLE: Array<BackendConnectionPoolStats> =
     Array::with_max_entries(MAX_BACKEND_CONNECTION_POOLS, 0);
 
 //

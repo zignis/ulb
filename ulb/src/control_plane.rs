@@ -1,39 +1,74 @@
 use std::{
     net::SocketAddr,
     num::NonZero,
+    os::unix::io::AsRawFd,
+    sync::{
+        Arc,
+        Mutex,
+    },
     thread::available_parallelism,
 };
 
 use anyhow::anyhow;
-use log::info;
+use log::{
+    debug,
+    error,
+    info,
+    warn,
+};
 use tokio::{
     io::AsyncReadExt,
     net::{
         TcpListener,
         TcpSocket,
+        TcpStream,
     },
     task::JoinSet,
 };
-use tokio_util::sync::CancellationToken;
+use tokio_util::{
+    sync::CancellationToken,
+    task::TaskTracker,
+};
 use ulb_common::ir::LISTEN_BACKLOG_QUEUE_SIZE;
 
-use crate::config::canonical::UlbConfig;
+use crate::{
+    bpf_bootstrap::ResidualConnectionMap,
+    config::canonical::{
+        ClusterConfig,
+        UlbConfig,
+    },
+    resident::handle_resident_session,
+    utils::get_socket_cookie,
+};
+
+// TODO: move this to config
+const DEFAULT_WORKERS: usize = 4;
 
 pub struct ControlPlane {
-    tasks: JoinSet<()>,
+    listener_tasks: JoinSet<()>,
     shutdown_token: CancellationToken,
+    connection_tracker: TaskTracker,
+    residual_connection_map: Arc<Mutex<ResidualConnectionMap>>,
+    clusters: Arc<Vec<ClusterConfig>>,
 }
 
 impl ControlPlane {
-    pub fn new(shutdown_token: CancellationToken) -> Self {
+    pub fn new(
+        shutdown_token: CancellationToken,
+        residual_connection_map: ResidualConnectionMap,
+        clusters: Arc<Vec<ClusterConfig>>,
+    ) -> Self {
         Self {
-            tasks: JoinSet::new(),
+            listener_tasks: JoinSet::new(),
             shutdown_token,
+            connection_tracker: TaskTracker::new(),
+            residual_connection_map: Arc::new(Mutex::new(residual_connection_map)),
+            clusters,
         }
     }
 
     pub fn start(&mut self, cfg: &UlbConfig) -> anyhow::Result<()> {
-        let num_cores = available_parallelism().map_or(4, NonZero::get);
+        let num_cores = available_parallelism().map_or(DEFAULT_WORKERS, NonZero::get);
         info!("starting {num_cores} workers per listener");
 
         for listener_cfg in &cfg.listeners {
@@ -42,34 +77,21 @@ impl ControlPlane {
             for _ in 0..num_cores {
                 let listener = bind_port(addr)?;
                 let shutdown_token = self.shutdown_token.clone();
+                let residual_connection_map = self.residual_connection_map.clone();
+                let clusters = self.clusters.clone();
+                let connection_tracker = self.connection_tracker.clone();
 
-                // TODO: reduce nesting inside the task
-                self.tasks.spawn(async move {
+                self.listener_tasks.spawn(async move {
                     loop {
                         tokio::select! {
                             Ok((stream, _)) = listener.accept() => {
-                                let _ = stream.set_nodelay(true);
-                                let task_shutdown = shutdown_token.clone();
-
-                                // EOF detection task
-                                tokio::spawn(async move {
-                                    let mut stream = stream;
-                                    let mut buf = [0u8; 1];
-
-                                    loop {
-                                        tokio::select! {
-                                            () = task_shutdown.cancelled() => {
-                                                break;
-                                            }
-
-                                            res = stream.read(&mut buf) => {
-                                                if let Ok(0) | Err(_) = res {
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
+                                handle_connection(
+                                    stream,
+                                    residual_connection_map.clone(),
+                                    clusters.clone(),
+                                    shutdown_token.clone(),
+                                    connection_tracker.clone(),
+                                );
                             }
 
                             () = shutdown_token.cancelled() => {
@@ -83,12 +105,96 @@ impl ControlPlane {
             info!("listening on http://{addr}");
         }
 
+        self.connection_tracker.close();
+
         Ok(())
     }
 
     pub async fn shutdown(&mut self) {
-        while self.tasks.join_next().await.is_some() {}
+        while self.listener_tasks.join_next().await.is_some() {}
+        self.connection_tracker.close();
+        self.connection_tracker.wait().await;
     }
+}
+
+fn handle_connection(
+    mut stream: TcpStream,
+    residual_connection_map: Arc<Mutex<ResidualConnectionMap>>,
+    clusters: Arc<Vec<ClusterConfig>>,
+    task_shutdown: CancellationToken,
+    connection_tracker: TaskTracker,
+) {
+    connection_tracker.spawn(async move {
+        let _ = stream.set_nodelay(true);
+        let cookie = match get_socket_cookie(stream.as_raw_fd()) {
+            Ok(x) => x,
+            Err(err) => {
+                error!("{err}");
+                return;
+            }
+        };
+
+        let mut peek_buf = [0u8; 1];
+        tokio::select! {
+            () = task_shutdown.cancelled() => return,
+            res = stream.peek(&mut peek_buf) => {
+                if let Ok(0) | Err(_) = res {
+                    return;
+                }
+            }
+        }
+
+        // is this a resident connection?
+        let resident_data = match residual_connection_map.lock() {
+            Ok(mut map) => match map.get(&cookie, 0) {
+                Ok(data) => {
+                    if let Err(err) = map.remove(&cookie) {
+                        debug!("failed to remove cookie from resident map: {err}");
+                    }
+
+                    Some(data)
+                }
+                Err(_) => None,
+            },
+            Err(err) => {
+                error!("`residual_connection_map` lock poisoned: {err}");
+                return;
+            }
+        };
+
+        if let Some(resident) = resident_data {
+            let cluster_idx = resident.cluster_idx() as usize;
+            let backend_idx = resident.backend_idx() as usize;
+
+            if let Some(addr) = clusters
+                .get(cluster_idx)
+                .and_then(|cluster| cluster.backends.get(backend_idx))
+                .map(|backend| backend.addr)
+            {
+                debug!(
+                    "routing resident connection to cluster {cluster_idx} (backend {backend_idx})"
+                );
+                handle_resident_session(stream, addr, task_shutdown.clone()).await;
+            } else {
+                warn!("stray resident connection (cluster {cluster_idx}; backend {backend_idx})");
+            }
+
+            return;
+        }
+
+        let mut buf = [0u8; 1 << 10];
+        loop {
+            tokio::select! {
+                () = task_shutdown.cancelled() => break,
+                // either an eof (TCP FIN) or stray payload that must be drained
+                res = stream.read(&mut buf) => {
+                    if let Ok(0) | Err(_) = res {
+                        break;
+                    }
+                }
+            }
+        }
+    });
 }
 
 fn bind_port(addr: SocketAddr) -> anyhow::Result<TcpListener> {
@@ -101,7 +207,11 @@ fn bind_port(addr: SocketAddr) -> anyhow::Result<TcpListener> {
     socket
         .set_reuseport(true)
         .map_err(|err| anyhow!("failed to set `reuseport` opt: {err}"))?;
-    socket.bind(addr)?;
+    socket
+        .bind(addr)
+        .map_err(|err| anyhow!("failed to bind {addr}: {err}"))?;
 
-    Ok(socket.listen(LISTEN_BACKLOG_QUEUE_SIZE)?)
+    socket
+        .listen(LISTEN_BACKLOG_QUEUE_SIZE)
+        .map_err(|err| anyhow!("failed to listen on {addr}: {err}"))
 }

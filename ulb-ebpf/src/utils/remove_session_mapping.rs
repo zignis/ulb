@@ -1,3 +1,4 @@
+use aya_ebpf::bindings::BPF_EXIST;
 use ulb_common::session::SocketCookie;
 
 use crate::{
@@ -5,16 +6,26 @@ use crate::{
         BACKEND_CONNECTION_POOL_TABLE,
         SESSION_MAP,
     },
-    utils::atomic_add_i64,
+    utils::decr_pool_active_connections,
 };
 
 #[inline(always)]
-pub fn remove_session_mapping(cookie: &SocketCookie) {
+pub fn remove_session_mapping(cookie: &SocketCookie, recycle_backend: bool) {
     if let Some(target) = unsafe { SESSION_MAP.get(cookie) } {
-        if target.update_active_connections == 1
-            && let Some(pool) = BACKEND_CONNECTION_POOL_TABLE.get_ptr_mut(target.pool_idx)
-        {
-            unsafe { atomic_add_i64((&raw mut (*pool).active_connections) as *mut i64, -1) };
+        if target.update_active_connections() {
+            decr_pool_active_connections(target.pool_idx);
+        }
+
+        if recycle_backend {
+            let backend_cookie = if target.is_backend_cookie() {
+                &target.cookie
+            } else {
+                cookie
+            };
+
+            if let Some(queue) = BACKEND_CONNECTION_POOL_TABLE.get(target.pool_idx) {
+                let _ = queue.push(backend_cookie, BPF_EXIST as u64);
+            }
         }
 
         let _ = SESSION_MAP.remove(cookie);

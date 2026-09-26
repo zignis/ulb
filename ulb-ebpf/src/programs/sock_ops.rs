@@ -25,6 +25,7 @@ use crate::{
     maps::{
         CLIENT_CONNECTION_MAP,
         LISTENER_PORTS,
+        SESSION_MAP,
     },
     utils::remove_session_mapping,
 };
@@ -35,7 +36,15 @@ fn ulb_sock_ops(ctx: SockOpsContext) -> u32 {
         // remove stale mapping from SESSION_MAP
         BPF_SOCK_OPS_STATE_CB if matches!(ctx.arg(1), BPF_TCP_CLOSE | BPF_TCP_TIME_WAIT) => {
             let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut c_void) } as SocketCookie;
-            remove_session_mapping(&cookie);
+
+            remove_session_mapping(
+                &cookie,
+                if let Some(target) = unsafe { SESSION_MAP.get(cookie) } {
+                    target.is_backend_cookie() // true if `cookie` is client
+                } else {
+                    false
+                },
+            );
         }
 
         // incoming client connection

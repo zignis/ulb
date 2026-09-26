@@ -37,9 +37,10 @@ fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
         let mut backend_cookie = backend.cookie;
         let ret =
             BACKEND_CONNECTION_MAP.redirect_skb(&ctx, &mut backend_cookie, BPF_SKB_EGRESS) as u32;
+
         if ret == SK_DROP {
             debug!(ctx, "[E:1] removing stale session");
-            remove_session_mapping(&cookie);
+            remove_session_mapping(&cookie, false);
         } else {
             return ret;
         }

@@ -13,6 +13,7 @@ pub const MAX_BACKEND_CONNECTION_POOLS: u32 = (MAX_BACKENDS_PER_CLUSTER as u32) 
 pub const MAX_CLIENT_CONNECTIONS: u32 = 1 << 16;
 pub const MAX_BACKEND_CONNECTIONS: u32 = 1 << 16;
 pub const MAX_SESSIONS: u32 = MAX_CLIENT_CONNECTIONS * 2; // maximum client-backend sessions for a given instant
+pub const DEFAULT_MAX_RESIDENT_CONNECTIONS: u32 = 1 << 10;
 
 pub const MAX_TCP_PORTS: u32 = 1 << 16;
 pub const LISTEN_BACKLOG_QUEUE_SIZE: u32 = 1 << 10; // listener socket queue size

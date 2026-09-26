@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
     bump_memlock_limit();
     bump_nofile_limit(cfg.rlimit_nofile);
 
-    let mut bpf = bootstrap_bpf(&args.cgroup)?;
+    let mut bpf = bootstrap_bpf(&args.cgroup, cfg.max_resident_connections)?;
 
     for listener_cfg in &cfg.listeners {
         bpf.listener_ports
@@ -106,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
             &cfg,
             &mut bpf.backend_connection_map,
             &mut bpf.backend_connection_pool_table,
+            &mut bpf.backend_connection_pool_stats_table,
         )
         .await?;
 
@@ -131,7 +132,12 @@ async fn main() -> anyhow::Result<()> {
         bpf.header_key_map.insert(key, val, 0)?;
     }
 
-    let mut control_plane = ControlPlane::new(shutdown_token.clone());
+    let mut control_plane = ControlPlane::new(
+        shutdown_token.clone(),
+        bpf.residual_connection_map,
+        Arc::new(cfg.clusters.clone()),
+    );
+
     control_plane.start(&cfg)?;
 
     loop {
