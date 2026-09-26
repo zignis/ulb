@@ -39,37 +39,6 @@ struct Args {
     cgroup: String,
 }
 
-fn bump_memlock_limit() {
-    // this is needed for older kernels that don't use the new
-    // memcg based accounting, see https://lwn.net/Articles/837122/
-    let rlim = rlimit {
-        rlim_cur: RLIM_INFINITY,
-        rlim_max: RLIM_INFINITY,
-    };
-    let ret = unsafe { setrlimit(RLIMIT_MEMLOCK, &rlim) };
-    if ret != 0 {
-        info!("remove limit on locked memory failed, ret is: {ret}");
-    }
-}
-
-fn bump_nofile_limit(limit: Option<u64>) {
-    let mut rlim = rlimit {
-        rlim_cur: 0,
-        rlim_max: limit.unwrap_or_default(),
-    };
-
-    if limit.is_none() && unsafe { getrlimit(RLIMIT_NOFILE, &mut rlim) } != 0 {
-        info!("failed to get OS open file limit");
-        return;
-    }
-
-    rlim.rlim_cur = rlim.rlim_max;
-    let ret = unsafe { setrlimit(RLIMIT_NOFILE, &rlim) };
-    if ret != 0 {
-        info!("increase open file limit failed, ret is: {ret}");
-    }
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -146,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
                 backend_manager.handle_event(
                     event,
                     &mut bpf.backend_connection_map,
-                    &mut bpf.backend_connection_pool_table
+                    &mut bpf.backend_connection_pool_table,
                 );
             }
 
@@ -163,4 +132,35 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn bump_memlock_limit() {
+    // this is needed for older kernels that don't use the new
+    // memcg based accounting, see https://lwn.net/Articles/837122/
+    let rlim = rlimit {
+        rlim_cur: RLIM_INFINITY,
+        rlim_max: RLIM_INFINITY,
+    };
+    let ret = unsafe { setrlimit(RLIMIT_MEMLOCK, &rlim) };
+    if ret != 0 {
+        info!("remove limit on locked memory failed, ret is: {ret}");
+    }
+}
+
+fn bump_nofile_limit(limit: Option<u64>) {
+    let mut rlim = rlimit {
+        rlim_cur: 0,
+        rlim_max: limit.unwrap_or_default(),
+    };
+
+    if limit.is_none() && unsafe { getrlimit(RLIMIT_NOFILE, &mut rlim) } != 0 {
+        info!("failed to get OS open file limit");
+        return;
+    }
+
+    rlim.rlim_cur = rlim.rlim_max;
+    let ret = unsafe { setrlimit(RLIMIT_NOFILE, &rlim) };
+    if ret != 0 {
+        info!("increase open file limit failed, ret is: {ret}");
+    }
 }
