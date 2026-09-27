@@ -185,7 +185,7 @@ fn handle_connection(
             return;
         }
 
-        let mut buf = [0u8; 1 << 10];
+        let mut buf = [0u8; 1 << 6];
         loop {
             tokio::select! {
                 () = task_shutdown.cancelled() => break,
