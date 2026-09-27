@@ -61,24 +61,26 @@ pub fn spawn_connection_monitor(
     addr: SocketAddr,
 ) {
     tasks.spawn(async move {
-        let mut buf = [0u8; 1];
+        let mut buf = [0u8; 1 << 6];
         loop {
-            match stream.read(&mut buf).await {
-                Ok(0) | Err(_) => {
-                    info!("[{addr}] connection closed");
+            // TODO: add max reconnect attempt limit if it was an error response
+            // ; maybe an error counter to stop reconnecting when it overflows
+            let res = stream.read(&mut buf).await;
 
-                    // TODO: add max reconnect attempt limit if it was an error response
-                    // ; maybe an error counter to stop reconnecting when it overflows
-                    let _ = tx_event.send(ManagerEvent::Disconnect {
-                        cluster_idx,
-                        pool_idx,
-                        addr,
-                    });
-
-                    break;
+            if let Ok(0) | Err(_) = res {
+                if let Err(err) = res {
+                    info!("[{addr}] connection closed: {err}");
+                } else {
+                    info!("[{addr}] connection closed (eof)");
                 }
 
-                _ => {}
+                let _ = tx_event.send(ManagerEvent::Disconnect {
+                    cluster_idx,
+                    pool_idx,
+                    addr,
+                });
+
+                break;
             }
         }
     });
