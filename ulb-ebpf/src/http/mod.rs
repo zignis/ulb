@@ -69,6 +69,8 @@ pub fn parse_req(ctx: &SkBuffContext) -> u32 {
         None => return SK_DROP,
     };
 
+    req.reset_offset();
+
     #[allow(unused_variables)]
     if let Err(err) = parse_request_line(ctx, req) {
         debug!(&ctx, "[E:2] failed to parse request line: {}", err.as_str());
