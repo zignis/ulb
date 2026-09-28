@@ -14,7 +14,7 @@ use crate::{
     BPF_SKB_EGRESS,
     debug,
     http::{
-        headers::parse_headers,
+        parse_headers,
         parse_req,
     },
     maps::{
