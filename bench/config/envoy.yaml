@@ -1,7 +1,7 @@
 static_resources:
   listeners:
   - name: simple_routing
-    per_connection_buffer_limit_bytes: 4194304 # 4MiB
+    per_connection_buffer_limit_bytes: 5242880 # 5MiB
     address:
       socket_address:
         address: 0.0.0.0
@@ -36,7 +36,7 @@ static_resources:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
   - name: deep_headers
-    per_connection_buffer_limit_bytes: 4194304 # 4MiB
+    per_connection_buffer_limit_bytes: 5242880 # 5MiB
     address:
       socket_address:
         address: 0.0.0.0
