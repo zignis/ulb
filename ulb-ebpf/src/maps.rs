@@ -57,7 +57,6 @@ pub static JMP_TABLE: ProgramArray = ProgramArray::with_max_entries(JMP_PROG_COU
 
 //
 
-/// shared per-cpu slot holding the parsed http request for the current request
 #[map]
 pub static HTTP_REQ_BUF: PerCpuArray<HttpRequest> = PerCpuArray::with_max_entries(1, 0);
 
