@@ -1,3 +1,10 @@
+//! Parses request headers
+//! https://www.rfc-editor.org/rfc/rfc9112.html#name-field-syntax
+
+mod key;
+mod rule_mask;
+mod val;
+
 use core::ffi::{
     c_long,
     c_void,
@@ -8,12 +15,11 @@ use aya_ebpf::{
     helpers::{
         bpf_loop,
         bpf_skb_load_bytes,
-        bpf_skb_store_bytes,
     },
     programs::SkBuffContext,
 };
 use ulb_common::{
-    JMP_PROG_ROUTER,
+    JmpProg,
     http::{
         HTTP_HDR_KEY_MAX_LEN,
         HTTP_HDR_VAL_MAX_LEN,
@@ -32,24 +38,24 @@ use ulb_common::{
 use crate::{
     BPF_LOOP_NEXT,
     BPF_LOOP_STOP,
-    debug,
-    error,
-    http::{
+    chars::{
         CH_CR,
         CH_LF,
-        headers::{
-            key::{
-                ParseKeyCtx,
-                parse_key,
-            },
-            rule_mask::{
-                UpdateRuleMaskCtx,
-                update_rule_mask,
-            },
-            val::{
-                ParseValCtx,
-                parse_val,
-            },
+    },
+    debug,
+    error,
+    http::headers::{
+        key::{
+            ParseKeyCtx,
+            parse_key,
+        },
+        rule_mask::{
+            UpdateRuleMaskCtx,
+            update_rule_mask,
+        },
+        val::{
+            ParseValCtx,
+            parse_val,
         },
     },
     maps::{
@@ -65,9 +71,7 @@ use crate::{
     },
 };
 
-mod key;
-mod rule_mask;
-mod val;
+const HOST: &[u8] = b"host";
 
 struct ParseHdrCtx<'a> {
     skb_ctx: &'a SkBuffContext,
@@ -107,7 +111,7 @@ pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
         return SK_DROP;
     }
 
-    if hdr_ctx.req._offset as usize >= HTTP_REQ_MAX_SCRATCH_SIZE {
+    if hdr_ctx.req.offset() >= HTTP_REQ_MAX_SCRATCH_SIZE {
         debug!(ctx, "[E:2] header overflow");
         return send_client_response(ctx, HTTP_431_REQUEST_HEADER_FIELDS_TOO_LARGE);
     }
@@ -126,7 +130,7 @@ pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
     }
 
     unsafe {
-        JMP_TABLE.tail_call(ctx, JMP_PROG_ROUTER);
+        JMP_TABLE.tail_call(ctx, JmpProg::Router as u32);
     }
 
     error!(ctx, "[E:2] tail call to router failed");
@@ -137,100 +141,21 @@ pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
 extern "C" fn parse_hdr(_idx: u32, ctx: *mut c_void) -> c_long {
     let ctx = unsafe { &mut *(ctx as *mut ParseHdrCtx) };
     let data = SkbData::from_ctx(ctx.skb_ctx);
-    let offset = ctx.req._offset as usize;
-
     ctx.hdr.reset();
 
-    if offset >= HTTP_REQ_MAX_SCRATCH_SIZE {
+    if ctx.req.offset() >= HTTP_REQ_MAX_SCRATCH_SIZE {
         return BPF_LOOP_STOP;
     }
 
-    if matches!(data.at(offset), Some(CH_CR) | Some(CH_LF) | None) {
+    if matches!(data.at(ctx.req.offset()), Some(CH_CR) | Some(CH_LF) | None) {
         return BPF_LOOP_STOP;
     }
 
-    // key
-
-    let mut key_ctx = ParseKeyCtx::new(data, offset);
-
-    let key_ret = unsafe {
-        bpf_loop(
-            HTTP_HDR_KEY_MAX_LEN as u32,
-            parse_key as *mut c_void,
-            &mut key_ctx as *mut ParseKeyCtx as *mut c_void,
-            0,
-        )
-    };
-
-    if key_ret < 0 || key_ctx.err || key_ctx.len == 0 {
-        ctx.err = key_ctx.err;
+    if parse_header_line(data, ctx).is_err() {
         return BPF_LOOP_STOP;
     }
 
-    // & is used to re-derive the bounds for verifier
-    let key_len = (key_ctx.len & (HTTP_HDR_KEY_MAX_LEN as u32 - 1)).max(1);
-
-    if unsafe {
-        bpf_skb_load_bytes(
-            ctx.skb_ctx.skb.skb as *const c_void,
-            offset as u32,
-            ctx.hdr.key.as_mut_ptr() as *mut c_void,
-            key_len,
-        )
-    } < 0
-    {
-        return BPF_LOOP_STOP;
-    }
-
-    ctx.hdr.key[key_len as usize] = 0;
-    ctx.hdr.key.len = key_len as u64;
-    ctx.hdr.key.clear_remaining(); // hdr key is used as hash key, need to zero-out bytes
-    ctx.hdr.key.make_ascii_lowercase(); // keys are always ascii and case-insensitive: https://www.rfc-editor.org/rfc/rfc9112.html#name-field-syntax
-
-    // value
-
-    let val_start = offset + key_len as usize + 1; // +1 for the colon
-    let mut val_ctx = ParseValCtx::new(data, val_start);
-
-    let val_ret = unsafe {
-        bpf_loop(
-            HTTP_HDR_VAL_MAX_LEN as u32,
-            parse_val as *mut c_void,
-            &mut val_ctx as *mut ParseValCtx as *mut c_void,
-            0,
-        )
-    };
-
-    if val_ret < 0 || val_ctx.err || !val_ctx.eol_found {
-        ctx.err = val_ctx.err;
-        return BPF_LOOP_STOP;
-    }
-
-    // & is used to re-derive the bounds for verifier
-    let val_len = val_ctx.len & (HTTP_HDR_VAL_MAX_LEN as u32 - 1);
-
-    #[allow(clippy::collapsible_if)]
-    if val_len > 0 {
-        if unsafe {
-            bpf_skb_load_bytes(
-                ctx.skb_ctx.skb.skb as *const c_void,
-                val_start as u32 + val_ctx.start,
-                ctx.hdr.val.as_mut_ptr() as *mut c_void,
-                val_len,
-            )
-        } < 0
-        {
-            return BPF_LOOP_STOP;
-        }
-    }
-
-    ctx.hdr.val[val_len as usize] = 0;
-    ctx.hdr.val.len = val_len as u64;
-    ctx.req._offset += (val_start + val_ctx.advance_by as usize - offset) as u32;
-
-    //
-
-    if ctx.hdr.key.len == 4 && (&ctx.hdr.key[..4] == b"host") {
+    if ctx.hdr.key.len == HOST.len() as u64 && (&ctx.hdr.key[..4] == HOST) {
         if !ctx.req.host.empty() {
             // request cannot have multiple host headers
             // https://www.rfc-editor.org/rfc/rfc9112.html#section-3.2-6
@@ -239,27 +164,6 @@ extern "C" fn parse_hdr(_idx: u32, ctx: *mut c_void) -> c_long {
         }
 
         ctx.req.host.clear_and_copy(&ctx.hdr.val);
-    }
-
-    // TODO: temporary fix to ignore client's keepalive preference
-    if ctx.hdr.key.len == 10 && (&ctx.hdr.key[..10] == b"connection") {
-        // TODO: no need to replace if hdr value is `keepalive`
-        let offset = offset as u32;
-        let filler = b"x-ulb-fill";
-
-        let status = unsafe {
-            bpf_skb_store_bytes(
-                ctx.skb_ctx.skb.skb,
-                offset,
-                filler.as_ptr() as *const c_void,
-                filler.len() as u32,
-                0,
-            )
-        };
-
-        if status < 0 {
-            return BPF_LOOP_STOP;
-        }
     }
 
     // update rule mask
@@ -287,3 +191,90 @@ extern "C" fn parse_hdr(_idx: u32, ctx: *mut c_void) -> c_long {
 
     BPF_LOOP_NEXT
 }
+
+#[inline(always)]
+fn parse_header_line(data: SkbData, ctx: &mut ParseHdrCtx) -> Result<(), ()> {
+    // key
+
+    let mut key_ctx = ParseKeyCtx::new(data, ctx.req.offset());
+
+    let key_ret = unsafe {
+        bpf_loop(
+            HTTP_HDR_KEY_MAX_LEN as u32,
+            parse_key as *mut c_void,
+            &mut key_ctx as *mut ParseKeyCtx as *mut c_void,
+            0,
+        )
+    };
+
+    if key_ret < 0 || key_ctx.err || key_ctx.len == 0 {
+        ctx.err = key_ctx.err;
+        return Err(());
+    }
+
+    // & is used to re-derive the bounds for verifier
+    let key_len = (key_ctx.len & (HTTP_HDR_KEY_MAX_LEN as u32 - 1)).max(1);
+
+    if unsafe {
+        bpf_skb_load_bytes(
+            ctx.skb_ctx.skb.skb as *const c_void,
+            ctx.req.offset() as u32,
+            ctx.hdr.key.as_mut_ptr() as *mut c_void,
+            key_len,
+        )
+    } < 0
+    {
+        return Err(());
+    }
+
+    ctx.hdr.key[key_len as usize] = 0;
+    ctx.hdr.key.len = key_len as u64;
+    ctx.hdr.key.clear_remaining(); // hdr key is used as hash key, need to zero-out bytes
+    ctx.hdr.key.make_ascii_lowercase(); // keys are always ascii and case-insensitive: https://www.rfc-editor.org/rfc/rfc9112.html#name-field-syntax
+    ctx.req.advance_offset(key_len as usize + 1); // +1 for colon
+
+    // value
+
+    let mut val_ctx = ParseValCtx::new(data, ctx.req.offset());
+
+    let val_ret = unsafe {
+        bpf_loop(
+            HTTP_HDR_VAL_MAX_LEN as u32,
+            parse_val as *mut c_void,
+            &mut val_ctx as *mut ParseValCtx as *mut c_void,
+            0,
+        )
+    };
+
+    if val_ret < 0 || val_ctx.err || !val_ctx.eol_found {
+        ctx.err = val_ctx.err;
+        return Err(());
+    }
+
+    // & is used to re-derive the bounds for verifier
+    let val_len = val_ctx.len & (HTTP_HDR_VAL_MAX_LEN as u32 - 1);
+
+    #[allow(clippy::collapsible_if)]
+    if val_len > 0 {
+        if unsafe {
+            bpf_skb_load_bytes(
+                ctx.skb_ctx.skb.skb as *const c_void,
+                ctx.req.offset() as u32 + val_ctx.start,
+                ctx.hdr.val.as_mut_ptr() as *mut c_void,
+                val_len,
+            )
+        } < 0
+        {
+            return Err(());
+        }
+    }
+
+    ctx.hdr.val[val_len as usize] = 0;
+    ctx.hdr.val.len = val_len as u64;
+    ctx.req.advance_offset(val_ctx.total_len as usize);
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {}
