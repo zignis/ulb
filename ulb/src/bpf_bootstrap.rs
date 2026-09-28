@@ -46,6 +46,7 @@ use ulb_common::{
     },
     session::{
         ResidentTarget,
+        SessionTarget,
         SocketCookie,
     },
 };
@@ -64,6 +65,7 @@ pub(crate) type ClusterTable = Array<MapData, Cluster>;
 pub(crate) type HeaderRuleTable = Array<MapData, HeaderRule>;
 pub(crate) type HeaderKeyMap = HashMap<MapData, [u8; HTTP_HDR_KEY_MAX_LEN], u64>;
 pub(crate) type ResidualConnectionMap = HashMap<MapData, SocketCookie, ResidentTarget>;
+pub(crate) type SessionMap = HashMap<MapData, SocketCookie, SessionTarget>;
 
 #[allow(dead_code)]
 pub struct BpfState {
@@ -79,6 +81,7 @@ pub struct BpfState {
     pub header_rule_table: HeaderRuleTable,
     pub header_key_map: HeaderKeyMap,
     pub residual_connection_map: ResidualConnectionMap,
+    pub session_map: SessionMap,
     pub jmp_table: ProgramArray<MapData>,
 }
 
@@ -244,6 +247,11 @@ pub fn bootstrap_bpf(
             .ok_or_else(|| anyhow!("missing `RESIDUAL_CONNECTION_MAP`"))?,
     )?;
 
+    let session_map = HashMap::try_from(
+        ebpf.take_map("SESSION_MAP")
+            .ok_or_else(|| anyhow!("missing `SESSION_MAP`"))?,
+    )?;
+
     // fill the map to disable resident connections
     if residual_capacity == 0 {
         // we can safely use `0` as key here; kernel never generates socket cookies with
@@ -266,6 +274,7 @@ pub fn bootstrap_bpf(
         header_rule_table,
         header_key_map,
         residual_connection_map,
+        session_map,
         jmp_table,
     })
 }
