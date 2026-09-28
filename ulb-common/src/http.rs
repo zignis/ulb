@@ -133,7 +133,7 @@ pub struct HttpRequest {
     pub dirty_route_idx: BoundedVec<u32, { MAX_ROUTES as usize }>,
     pub dirty_route_map: [bool; MAX_ROUTES as usize],
     // -- internal
-    pub _offset: u32, // read offset
+    _offset: usize, // read offset
 }
 
 impl HttpRequest {
