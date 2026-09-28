@@ -307,7 +307,7 @@ pub fn resolve_backend(
 
     warn!(
         ctx,
-        "[E:3] no backend connection available, adding to resident queue"
+        "[W:3] no backend connection available, adding to resident queue"
     );
 
     Err(ResolveBackendError::PoolExhausted { backend_idx })
