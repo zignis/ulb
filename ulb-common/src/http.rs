@@ -138,6 +138,21 @@ pub struct HttpRequest {
 
 impl HttpRequest {
     #[inline(always)]
+    pub fn offset(&self) -> usize {
+        self._offset
+    }
+
+    #[inline(always)]
+    pub fn reset_offset(&mut self) {
+        self._offset = 0;
+    }
+
+    #[inline(always)]
+    pub fn advance_offset(&mut self, by: usize) {
+        self._offset += by;
+    }
+
+    #[inline(always)]
     pub fn mark_route_dirty(&mut self, route_idx: usize) {
         if !self.dirty_route_map[route_idx] {
             self.dirty_route_map[route_idx] = true;
