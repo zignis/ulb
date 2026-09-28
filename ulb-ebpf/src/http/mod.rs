@@ -78,7 +78,7 @@ pub fn parse_req(ctx: &SkBuffContext) -> u32 {
     }
 
     unsafe {
-        JMP_TABLE.tail_call(ctx, JMP_PROG_HEADER_PARSER);
+        JMP_TABLE.tail_call(ctx, JmpProg::HdrParser as u32);
     }
 
     error!(ctx, "[E:2] tail call to header parser failed");
