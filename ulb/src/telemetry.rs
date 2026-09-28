@@ -42,22 +42,59 @@ pub(super) fn bpf_log_closure<F: FnOnce()>(f: F) {
     f();
 }
 
-/// parses a telemetry prefix `[D:X]` or `[E:X]` from the message and extract
-/// the depth from it. returns `(depth, is_error, remainder_of_message)`.
-fn parse_message(msg: &str) -> (usize, bool, &str) {
-    let is_debug = msg.starts_with("[D:");
-    let is_error = msg.starts_with("[E:");
+#[derive(Debug)]
+enum MsgType {
+    Debug,
+    Warn,
+    Error,
+}
 
-    #[allow(clippy::collapsible_if)]
-    if is_debug || is_error {
-        if let Some((depth_str, rest)) = msg[3..].split_once(']')
-            && let Ok(depth) = depth_str.parse::<usize>()
-        {
-            return (depth, is_error, rest.trim_start());
+impl TryFrom<&str> for MsgType {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, <MsgType as TryFrom<&str>>::Error> {
+        if value.len() < 5 {
+            return Err(());
+        }
+
+        match &value[..3] {
+            "[D:" => Ok(Self::Debug),
+            "[W:" => Ok(Self::Warn),
+            "[E:" => Ok(Self::Error),
+            _ => Err(()),
         }
     }
+}
 
-    (0, false, msg)
+impl MsgType {
+    pub fn get_style(&self) -> Option<Style> {
+        match self {
+            Self::Warn => Some(
+                Style::new()
+                    .fg_color(Some(Color::Ansi(AnsiColor::Yellow)))
+                    .bold(),
+            ),
+            Self::Error => Some(
+                Style::new()
+                    .fg_color(Some(Color::Ansi(AnsiColor::Red)))
+                    .bold(),
+            ),
+            _ => None,
+        }
+    }
+}
+
+/// parses a telemetry prefix `[D:X]`, `[W:X]` or `[E:X]` from the message and
+/// extract the depth from it. returns `(depth, type, rest_of_msg)`.
+fn parse_message(msg: &str) -> (usize, Option<MsgType>, &str) {
+    if let Ok(msg_type) = MsgType::try_from(msg)
+        && let Some((depth_str, rest)) = msg[3..].split_once(']')
+        && let Ok(depth) = depth_str.parse::<usize>()
+    {
+        return (depth, Some(msg_type), rest.trim_start());
+    }
+
+    (0, None, msg)
 }
 
 fn generate_tree_indent(depth: usize) -> String {
@@ -71,11 +108,9 @@ fn generate_tree_indent(depth: usize) -> String {
     indent
 }
 
-fn get_style(level: Level, is_error: bool, is_kernel: bool) -> Style {
-    if is_error {
-        return Style::new()
-            .fg_color(Some(Color::Ansi(AnsiColor::Red)))
-            .bold();
+fn get_style(level: Level, msg_type: Option<MsgType>, is_kernel: bool) -> Style {
+    if let Some(style) = msg_type.and_then(|x| x.get_style()) {
+        return style;
     }
 
     match (level, is_kernel) {
@@ -103,10 +138,10 @@ pub fn init(fancy: bool) {
             let target = record.target();
             let module = target.split("::").last().unwrap_or(target);
             let message = format!("{}", record.args());
-            let (depth, is_error, remainder) = parse_message(&message);
+            let (depth, msg_type, remainder) = parse_message(&message);
             let indent_branch = generate_tree_indent(depth);
             let is_kernel = IS_BPF_LOG_CTX.with(|c| c.get());
-            let style = get_style(record.level(), is_error, is_kernel);
+            let style = get_style(record.level(), msg_type, is_kernel);
             let tree_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightBlack)));
 
             writeln!(
