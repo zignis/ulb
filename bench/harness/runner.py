@@ -73,8 +73,6 @@ def run_benchmark(
                 f"127.0.0.1:{target_port}",
                 "--duration",
                 "60",
-                "--keep-alive",
-                "false",
                 "--plain-output",
             ]
 
@@ -103,7 +101,7 @@ def run_benchmark(
                 sys.exit(1)
             except subprocess.CalledProcessError as e:
                 print(
-                    f"client failed for {param_cli_arg} {param}; ret: {e.returncode}",
+                    f"client failed: {param_cli_arg} {param}; ret: {e.returncode}",
                     file=sys.stderr,
                 )
                 print(f"stderr:\n{e.stderr}", file=sys.stderr)
