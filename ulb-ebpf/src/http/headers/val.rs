@@ -1,3 +1,5 @@
+//! Parses HTTP header line value
+
 use core::ffi::{
     c_long,
     c_void,
@@ -24,7 +26,7 @@ pub(super) struct ParseValCtx {
     pub(super) offset: usize,
     pub(super) start: u32,
     pub(super) len: u32,
-    pub(super) advance_by: u32,
+    pub(super) total_len: u32,
     pub(super) eol_found: bool,
     pub(super) err: bool,
     reading: bool,
@@ -38,7 +40,7 @@ impl ParseValCtx {
             offset,
             start: 0,
             len: 0,
-            advance_by: 0,
+            total_len: 0,
             eol_found: false,
             err: false,
             reading: false,
@@ -76,7 +78,7 @@ pub(super) extern "C" fn parse_val(itr: u32, ctx: *mut c_void) -> c_long {
 
             ctx.eol_found = true;
             ctx.len -= ctx.start;
-            ctx.advance_by = itr + 2; // crlf
+            ctx.total_len = itr + 2; // crlf
 
             BPF_LOOP_STOP
         }
@@ -108,3 +110,6 @@ pub(super) extern "C" fn parse_val(itr: u32, ctx: *mut c_void) -> c_long {
         None => BPF_LOOP_STOP,
     }
 }
+
+#[cfg(test)]
+mod tests {}
