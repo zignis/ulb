@@ -305,7 +305,7 @@ pub fn resolve_backend(
         return Ok((cookie, pool_idx, needs_connection_update));
     }
 
-    warn!(ctx, "[E:3] no backend available, adding to resident queue");
+    warn!(ctx, "[E:3] no backend connection available, adding to resident queue");
 
     Err(ResolveBackendError::PoolExhausted { backend_idx })
 }
