@@ -62,10 +62,14 @@ struct Args {
     workers: usize,
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     keep_alive: bool,
-    #[arg(long, default_value_t = 2)]
+    #[arg(long, default_value_t = MIN_HEADERS)]
     header_count: usize,
     #[arg(long, default_value_t = 0.0)]
     think_time: f64,
+    #[arg(long)]
+    open_loop: bool,
+    #[arg(long)]
+    rps: Option<u64>,
     #[arg(long)]
     plain_output: bool,
 }
@@ -92,6 +96,7 @@ async fn worker(
     req_body_size: usize,
     keep_alive: bool,
     think_time: f64,
+    open_loop: bool,
     headers: Arc<Vec<(HeaderName, HeaderValue)>>,
 ) -> (Histogram<u64>, u64, u64) {
     let mut hist = Histogram::<u64>::new_with_bounds(1, HIST_UPPER_BOUND, 3).unwrap();
@@ -99,6 +104,7 @@ async fn worker(
     let mut errs = 0;
     let body = Bytes::from(vec![BODY_CH; req_body_size]);
     let req = build_request(&body, keep_alive, &headers);
+    let mut next_intended_start = Instant::now();
 
     while !stop.load(Ordering::Relaxed) {
         let stream = match TcpStream::connect(addr).await {
@@ -137,8 +143,22 @@ async fn worker(
                 break;
             }
 
+            if open_loop && think_time > 0.0 {
+                let now = Instant::now();
+                // throttle
+                if now < next_intended_start {
+                    sleep(next_intended_start - now).await;
+                }
+            }
+
             let req_clone = req.clone();
-            let now = Instant::now();
+            let start_time = if open_loop && think_time > 0.0 {
+                let start = next_intended_start;
+                next_intended_start += exp_wait(think_time);
+                start
+            } else {
+                Instant::now()
+            };
 
             match sender.send_request(req_clone).await {
                 Ok(mut res) => {
@@ -157,17 +177,16 @@ async fn worker(
                     }
 
                     if ok {
-                        let elapsed = now.elapsed().as_micros() as u64;
+                        let elapsed = start_time.elapsed().as_micros() as u64;
+
                         if elapsed > 0 {
                             let _ = hist.record(elapsed);
                         }
+
                         reqs += 1;
 
-                        if think_time > 0.0 {
-                            // https://docs.rs/rand/latest/rand/distr/struct.StandardUniform.html
-                            let u: f64 = rand::rng().sample(OpenClosed01);
-                            let wait = -think_time * u.ln();
-                            sleep(Duration::from_secs_f64(wait)).await;
+                        if !open_loop && think_time > 0.0 {
+                            sleep(exp_wait(think_time)).await;
                         }
                     } else {
                         errs += 1;
@@ -195,6 +214,7 @@ async fn worker(
 async fn run_phase(
     args: &Args,
     duration: u64,
+    think_time: f64,
     headers: Arc<Vec<(HeaderName, HeaderValue)>>,
 ) -> (Histogram<u64>, u64, u64, f64) {
     let stop = Arc::new(AtomicBool::new(false));
@@ -207,7 +227,8 @@ async fn run_phase(
             args.addr,
             args.req_body_size,
             args.keep_alive,
-            args.think_time,
+            think_time,
+            args.open_loop,
             headers.clone(),
         )));
     }
@@ -236,6 +257,13 @@ async fn run_phase(
     (merged_hist, total_reqs, total_errs, elapsed)
 }
 
+#[inline(always)]
+fn exp_wait(think_time: f64) -> Duration {
+    let u: f64 = rand::rng().sample(OpenClosed01);
+    let wait = -think_time * u.ln();
+    Duration::from_secs_f64(wait)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
@@ -259,7 +287,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!(">>> warmup (10s) <<<");
     }
 
-    let _ = run_phase(&args, 10, headers.clone()).await;
+    let mut think_time = args.think_time;
+    if let Some(rps) = args.rps {
+        if rps == 0 {
+            eprintln!("`rps` must be greater than 0");
+            exit(1);
+        }
+
+        think_time = args.workers as f64 / rps as f64;
+    }
+
+    let _ = run_phase(&args, 10, think_time, headers.clone()).await;
 
     if !args.plain_output {
         println!();
@@ -276,7 +314,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!(">>> run {run}/5 ({}s)...", args.duration);
         }
 
-        let (hist, reqs, errs, elapsed) = run_phase(&args, args.duration, headers.clone()).await;
+        let (hist, reqs, errs, elapsed) =
+            run_phase(&args, args.duration, think_time, headers.clone()).await;
         let rps = reqs as f64 / elapsed;
         total_rps += rps;
         global_reqs += reqs;
@@ -289,15 +328,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let avg_rps = (total_rps / NUM_SAMPLES as f64).round() as u64;
+    let p50_lat = global_hist.value_at_percentile(50.0);
+    let p75_lat = global_hist.value_at_percentile(75.0);
     let p99_lat = global_hist.value_at_percentile(99.0);
+    let p999_lat = global_hist.value_at_percentile(99.9);
 
     if args.plain_output {
-        println!("{avg_rps}|{p99_lat}|{global_reqs}|{global_errs}");
+        println!("{avg_rps}|{p50_lat}|{p75_lat}|{p99_lat}|{p999_lat}|{global_reqs}|{global_errs}");
     } else {
         println!();
         println!(">>> results <<<");
         println!(">>> avg rps: {avg_rps}");
+        println!(">>> p50 lat: {p50_lat} (us)");
+        println!(">>> p75 lat: {p75_lat} (us)");
         println!(">>> p99 lat: {p99_lat} (us)");
+        println!(">>> p99.9 lat: {p999_lat} (us)");
         println!(">>> total reqs: {global_reqs}");
         println!(">>> total errs: {global_errs}");
     }
