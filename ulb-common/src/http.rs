@@ -139,7 +139,7 @@ pub struct HttpRequest {
 impl HttpRequest {
     #[inline(always)]
     pub fn offset(&self) -> usize {
-        self._offset
+        self._offset.min(HTTP_REQ_MAX_SCRATCH_SIZE)
     }
 
     #[inline(always)]
@@ -156,7 +156,6 @@ impl HttpRequest {
     pub fn mark_route_dirty(&mut self, route_idx: usize) {
         if !self.dirty_route_map[route_idx] {
             self.dirty_route_map[route_idx] = true;
-
             let len = self.dirty_route_idx.len;
             if len < MAX_ROUTES as u64 {
                 self.dirty_route_idx[len as usize] = route_idx as u32;
