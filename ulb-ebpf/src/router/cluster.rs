@@ -64,7 +64,7 @@ struct SessionCtx<'a> {
     skb_ctx: &'a SkBuffContext,
     pool_idx: u32,
     client_cookie: SocketCookie,
-    update_active_connections: bool,
+    needs_connection_update: bool,
     queue: &'a Queue<SocketCookie, MAX_BACKEND_CONNECTION_POOL_SIZE>,
     created: Option<SocketCookie>,
 }
@@ -89,14 +89,14 @@ extern "C" fn create_session(_idx: u32, ctx: *mut c_void) -> c_long {
             SessionTarget::new(
                 ctx.client_cookie,
                 ctx.pool_idx,
-                ctx.update_active_connections,
+                ctx.needs_connection_update,
                 false,
             ),
             BPF_NOEXIST as u64, // atomically claim the backend socket for this client
         )
         .is_ok()
     {
-        if ctx.update_active_connections {
+        if ctx.needs_connection_update {
             incr_pool_active_connections(ctx.pool_idx);
         }
 
@@ -125,7 +125,7 @@ struct SelectBackendCtx<'a> {
     cluster: *mut Cluster,
     backend_idx: u32,
     client_cookie: SocketCookie,
-    update_active_connections: bool,
+    needs_connection_update: bool,
     selected: Option<(SocketCookie, u32)>,
 }
 
@@ -152,7 +152,7 @@ extern "C" fn select_backend(itr: u32, ctx: *mut c_void) -> c_long {
         skb_ctx: ctx.skb_ctx,
         pool_idx: backend.pool_idx,
         client_cookie: ctx.client_cookie,
-        update_active_connections: ctx.update_active_connections,
+        needs_connection_update: ctx.needs_connection_update,
         queue,
         created: None,
     };
@@ -189,7 +189,7 @@ pub fn resolve_backend(
         None => return Err(ResolveBackendError::Internal),
     };
     let len = unsafe { (*cluster).backends.len } as u32;
-    let mut update_active_connections = false;
+    let mut needs_connection_update = false;
 
     debug!(ctx, "[D:3] cluster {} has {} backends", cluster_idx, len);
 
@@ -247,7 +247,7 @@ pub fn resolve_backend(
         }
 
         LoadBalancingPolicy::LeastLoaded => {
-            update_active_connections = true;
+            needs_connection_update = true;
 
             if len == 1 {
                 0
@@ -284,7 +284,7 @@ pub fn resolve_backend(
         cluster,
         backend_idx,
         client_cookie,
-        update_active_connections,
+        needs_connection_update,
         selected: None,
     };
 
@@ -302,7 +302,7 @@ pub fn resolve_backend(
     }
 
     if let Some((cookie, pool_idx)) = backend_ctx.selected {
-        return Ok((cookie, pool_idx, update_active_connections));
+        return Ok((cookie, pool_idx, needs_connection_update));
     }
 
     warn!(ctx, "[E:3] no backend available, adding to resident queue");

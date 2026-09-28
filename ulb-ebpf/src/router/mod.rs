@@ -96,7 +96,7 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
             let client_cookie =
                 unsafe { bpf_get_socket_cookie(ctx.skb.skb as *mut c_void) } as SocketCookie;
 
-            let (mut backend_cookie, pool_idx, update_active_connections) =
+            let (mut backend_cookie, pool_idx, needs_connection_update) =
                 match resolve_backend(ctx, cluster_idx, client_cookie) {
                     Ok(x) => x,
 
@@ -123,7 +123,7 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
             #[allow(unused_variables)]
             if let Err(eno) = SESSION_MAP.insert(
                 client_cookie,
-                SessionTarget::new(backend_cookie, pool_idx, update_active_connections, true),
+                SessionTarget::new(backend_cookie, pool_idx, needs_connection_update, true),
                 0,
             ) {
                 error!(
@@ -131,7 +131,7 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
                     "[E:2] failed to insert client->backend session ({})", eno
                 );
 
-                if update_active_connections {
+                if needs_connection_update {
                     decr_pool_active_connections(pool_idx);
                 }
 
