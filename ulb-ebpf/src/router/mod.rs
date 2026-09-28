@@ -149,7 +149,7 @@ pub fn route_req(ctx: &SkBuffContext) -> u32 {
 
             if ret == SK_DROP {
                 debug!(&ctx, "[E:2] redirect failure; removing session");
-                remove_session_mapping(&client_cookie, false);
+                remove_session_mapping(&client_cookie);
             }
 
             ret

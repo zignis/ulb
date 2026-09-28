@@ -40,7 +40,7 @@ fn ulb_client_stream_verdict(ctx: SkBuffContext) -> u32 {
 
         if ret == SK_DROP {
             debug!(ctx, "[E:1] removing stale session");
-            remove_session_mapping(&cookie, false);
+            remove_session_mapping(&cookie);
         } else {
             return ret;
         }
