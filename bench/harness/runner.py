@@ -45,12 +45,26 @@ def run_benchmark(
 
     with open(out_csv, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([metric_name, "rps", "p99_latency", "requests", "errors"])
+        writer.writerow(
+            [
+                metric_name,
+                "rps",
+                "p50_latency",
+                "p75_latency",
+                "p99_latency",
+                "p999_latency",
+                "requests",
+                "errors",
+            ]
+        )
 
         for param in params_list:
             print(f"[{lb_name}] testing {metric_name}: {param}", file=sys.stderr)
 
             cmd = [
+                "sudo",
+                "prlimit",
+                "--nofile=1048576:1048576",
                 "taskset",
                 "-c",
                 "0,2-5",
@@ -67,7 +81,10 @@ def run_benchmark(
             cmd.extend([param_cli_arg, str(param)])
 
             for k, v in fixed_args.items():
-                cmd.extend([k, str(v)])
+                if v == "":
+                    cmd.append(k)
+                else:
+                    cmd.extend([k, str(v)])
 
             try:
                 res = subprocess.run(
@@ -78,8 +95,8 @@ def run_benchmark(
                     timeout=TIMEOUT,
                 )
                 output = res.stdout.strip().split("\n")[-1]
-                rps, p99, reqs, errs = output.split("|")
-                writer.writerow([param, rps, p99, reqs, errs])
+                rps, p50, p75, p99, p999, reqs, errs = output.split("|")
+                writer.writerow([param, rps, p50, p75, p99, p999, reqs, errs])
                 f.flush()
             except subprocess.TimeoutExpired:
                 print(f"timeout {param_cli_arg} {param}", file=sys.stderr)
