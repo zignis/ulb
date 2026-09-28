@@ -25,7 +25,7 @@ use hyper::{
 use hyper_util::rt::TokioIo;
 use mimalloc::MiMalloc;
 use tokio::{
-    net::TcpListener,
+    net::TcpSocket,
     time::sleep,
 };
 
@@ -34,6 +34,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 const BODY_CH: u8 = b'#';
 const MAX_HEADERS: usize = 300;
+const BACKLOG_QUEUE_SIZE: u32 = 65536;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -47,7 +48,10 @@ struct Args {
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let body = Bytes::from(vec![BODY_CH; args.res_body_size]);
-    let listener = TcpListener::bind(args.addr).await?;
+    let socket = TcpSocket::new_v4()?;
+    socket.set_reuseaddr(true)?;
+    socket.bind(args.addr)?;
+    let listener = socket.listen(BACKLOG_QUEUE_SIZE)?;
 
     println!(">>> listening on http://{} <<<", args.addr);
 
