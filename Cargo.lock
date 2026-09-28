@@ -1555,6 +1555,7 @@ dependencies = [
  "indicatif-log-bridge",
  "libc",
  "log",
+ "parking_lot",
  "schemars",
  "serde",
  "serde_json",

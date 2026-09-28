@@ -27,6 +27,7 @@ indicatif = { version = "0.18.6" }
 indicatif-log-bridge = { version = "0.2.3" }
 libc = { version = "0.2.189" }
 log = { workspace = true }
+parking_lot = { version = "0.12.5" }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { version = "1.0.151", optional = true }
