@@ -1,3 +1,5 @@
+//! Parses HTTP header line key
+
 use core::ffi::{
     c_long,
     c_void,
@@ -62,3 +64,6 @@ pub(super) extern "C" fn parse_key(itr: u32, ctx: *mut c_void) -> c_long {
         None => BPF_LOOP_STOP,
     }
 }
+
+#[cfg(test)]
+mod tests {}
