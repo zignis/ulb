@@ -40,6 +40,8 @@ impl SkbData {
         }
     }
 
+    // TODO: remove once used somewhere
+    #[allow(dead_code)]
     #[inline(always)]
     pub unsafe fn at_unchecked(&self, index: usize) -> u8 {
         unsafe { *self.start.add(index) }

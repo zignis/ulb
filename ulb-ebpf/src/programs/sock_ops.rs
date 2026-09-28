@@ -25,7 +25,6 @@ use crate::{
     maps::{
         CLIENT_CONNECTION_MAP,
         LISTENER_PORTS,
-        SESSION_MAP,
     },
     utils::remove_session_mapping,
 };
