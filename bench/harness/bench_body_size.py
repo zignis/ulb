@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-import argparse
+import sys
 from runner import run_benchmark
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="throughput/latency vs request body size"
-    )
-    parser.add_argument("lb_name", help="load balanacer name")
-    args = parser.parse_args()
+    if len(sys.argv) < 2:
+        print(f"usage: {sys.argv[0]} <lb_name>", file=sys.stderr)
+        sys.exit(1)
 
-    sizes = [2**i for i in range(23)]
+    lb_name = sys.argv[1]
+    sizes = [0] + [2**i for i in range(1, 23)]
     fixed = {
-        "--workers": "64",
+        "--workers": "100",
+        "--keep-alive": "true",
+        "--think-time": "0",
     }
 
     run_benchmark(
-        lb_name=args.lb_name,
+        lb_name=lb_name,
         metric_name="body_size",
         results_subdir="body_size",
         params_list=sizes,
