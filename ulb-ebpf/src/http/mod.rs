@@ -65,7 +65,7 @@ pub fn parse_req(ctx: &SkBuffContext) -> u32 {
 
     #[allow(unused_variables)]
     if let Err(err) = parse_request_line(ctx, req) {
-        debug!(&ctx, "[E:2] failed to parse request line: {}", err.as_str());
+        debug!(&ctx, "[W:2] failed to parse request line: {}", err.as_str());
         return send_client_response(ctx, err.http_response());
     }
 
