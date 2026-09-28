@@ -112,12 +112,12 @@ pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
     }
 
     if hdr_ctx.req.offset() >= HTTP_REQ_MAX_SCRATCH_SIZE {
-        debug!(ctx, "[E:2] header overflow");
+        debug!(ctx, "[W:2] header overflow");
         return send_client_response(ctx, HTTP_431_REQUEST_HEADER_FIELDS_TOO_LARGE);
     }
 
     if hdr_ctx.err {
-        debug!(ctx, "[E:2] bad headers");
+        debug!(ctx, "[W:2] bad headers");
         return send_client_response(ctx, HTTP_400_BAD_REQUEST);
     }
 
@@ -125,7 +125,7 @@ pub fn parse_headers(ctx: &SkBuffContext) -> u32 {
 
     // host header is mandatory in http/1.1
     if matches!(hdr_ctx.req.version, HttpVersion::V1P1) && hdr_ctx.req.host.empty() {
-        debug!(ctx, "[E:2] missing host header for HTTP/1.1 request");
+        debug!(ctx, "[W:2] missing host header for HTTP/1.1 request");
         return send_client_response(ctx, HTTP_400_BAD_REQUEST);
     }
 
