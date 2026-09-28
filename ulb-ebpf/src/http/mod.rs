@@ -1,24 +1,23 @@
+mod headers;
+mod request_line;
+
 use aya_ebpf::{
     bindings::sk_action::SK_DROP,
     programs::SkBuffContext,
 };
-
-pub mod headers;
-mod request_line;
-
-use request_line::*;
-use ulb_common::JMP_PROG_HEADER_PARSER;
+pub use headers::parse_headers;
+use ulb_common::JmpProg;
 
 use crate::{
     debug,
     error,
+    http::request_line::parse_request_line,
     maps::JMP_TABLE,
     utils::{
         HTTP_414_URI_TOO_LONG,
         HTTP_500_INTERNAL_SERVER_ERROR,
         HTTP_501_NOT_IMPLEMENTED,
         HTTP_505_HTTP_VERSION_NOT_SUPPORTED,
-        b8,
         get_http_buf,
         send_client_response,
     },
