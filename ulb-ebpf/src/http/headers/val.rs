@@ -8,7 +8,7 @@ use ulb_common::http::HTTP_REQ_MAX_SCRATCH_SIZE;
 use crate::{
     BPF_LOOP_NEXT,
     BPF_LOOP_STOP,
-    http::{
+    chars::{
         CH_CR,
         CH_HTAB,
         CH_LF,

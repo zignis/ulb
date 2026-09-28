@@ -4,6 +4,7 @@
 
 use core::ffi::c_long;
 
+mod chars;
 mod http;
 mod maps;
 mod programs;
