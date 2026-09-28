@@ -1,6 +1,11 @@
-use std::os::fd::AsRawFd;
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    os::fd::AsRawFd,
+};
 
 use log::{
+    debug,
     error,
     info,
 };
@@ -10,8 +15,12 @@ use tokio::{
         UnboundedSender,
         unbounded_channel,
     },
-    task::JoinSet,
+    task::{
+        AbortHandle,
+        JoinSet,
+    },
 };
+use ulb_common::session::SocketCookie;
 
 use crate::{
     backend::{
@@ -34,10 +43,19 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
+pub struct BackendConnection {
+    pub abort_handle: AbortHandle,
+    pub cluster_idx: u32,
+    pub pool_idx: u32,
+    pub addr: SocketAddr,
+}
+
 pub struct BackendManager {
     tasks: JoinSet<()>,
     event_tx: UnboundedSender<ManagerEvent>,
     event_rx: UnboundedReceiver<ManagerEvent>,
+    backend_connections: HashMap<SocketCookie, BackendConnection>,
 }
 
 impl Default for BackendManager {
@@ -47,6 +65,7 @@ impl Default for BackendManager {
             event_tx,
             event_rx,
             tasks: JoinSet::new(),
+            backend_connections: HashMap::new(),
         }
     }
 }
@@ -54,6 +73,10 @@ impl Default for BackendManager {
 impl BackendManager {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn get_event_tx(&self) -> UnboundedSender<ManagerEvent> {
+        self.event_tx.clone()
     }
 
     pub async fn next_event(&mut self) -> Option<ManagerEvent> {
@@ -77,6 +100,7 @@ impl BackendManager {
         initialize_clusters(
             self.event_tx.clone(),
             &mut self.tasks,
+            &mut self.backend_connections,
             cfg,
             backend_map,
             backend_conn_pool_table,
@@ -93,10 +117,15 @@ impl BackendManager {
     ) {
         match event {
             ManagerEvent::Disconnect {
+                backend_cookie,
                 cluster_idx,
                 pool_idx,
                 addr,
             } => {
+                if let Some(cookie) = backend_cookie {
+                    self.backend_connections.remove(&cookie);
+                }
+
                 handle_disconnect(
                     self.event_tx.clone(),
                     &mut self.tasks,
@@ -116,16 +145,27 @@ impl BackendManager {
                 if let Err(err) = backend_map.insert(new_cookie, stream.as_raw_fd(), 0) {
                     error!("failed to insert socket into BACKEND_CONNECTION_MAP: {err}");
                 } else {
-                    info!("inserted CK:{} into BACKEND_CONNECTION_MAP", new_cookie);
+                    debug!("inserted CK:{new_cookie} into BACKEND_CONNECTION_MAP");
                 }
 
-                spawn_connection_monitor(
+                let abort_handle = spawn_connection_monitor(
                     self.event_tx.clone(),
                     &mut self.tasks,
                     stream,
+                    new_cookie,
                     cluster_idx,
                     pool_idx,
                     addr,
+                );
+
+                self.backend_connections.insert(
+                    new_cookie,
+                    BackendConnection {
+                        abort_handle,
+                        cluster_idx,
+                        pool_idx,
+                        addr,
+                    },
                 );
 
                 if let Ok(mut queue) = backend_conn_pool_table.get(&pool_idx, 0) {
@@ -134,6 +174,20 @@ impl BackendManager {
                     }
                 } else {
                     error!("failed to get queue from BACKEND_CONNECTION_POOL_TABLE");
+                }
+            }
+
+            ManagerEvent::TerminateSession(backend_cookie) => {
+                if let Some(connection) = self.backend_connections.remove(&backend_cookie) {
+                    connection.abort_handle.abort();
+
+                    handle_disconnect(
+                        self.event_tx.clone(),
+                        &mut self.tasks,
+                        connection.cluster_idx,
+                        connection.pool_idx,
+                        connection.addr,
+                    );
                 }
             }
         }

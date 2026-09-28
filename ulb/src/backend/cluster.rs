@@ -14,12 +14,16 @@ use tokio::{
     sync::mpsc::UnboundedSender,
     task::JoinSet,
 };
-use ulb_common::ir::BackendConnectionPoolStats;
+use ulb_common::{
+    ir::BackendConnectionPoolStats,
+    session::SocketCookie,
+};
 
 use crate::{
     backend::{
         connection::register_backend,
         event::ManagerEvent,
+        manager::BackendConnection,
     },
     bpf_bootstrap::{
         BPF_EXIST,
@@ -38,8 +42,9 @@ use crate::{
 const CONNECT_BATCH_SIZE: usize = 1 << 6; // avoid tcp flood at backend for large pool sizes
 
 pub async fn initialize_clusters(
-    tx_event: UnboundedSender<ManagerEvent>,
+    event_tx: UnboundedSender<ManagerEvent>,
     tasks: &mut JoinSet<()>,
+    backend_connections: &mut HashMap<SocketCookie, BackendConnection>,
     cfg: &UlbConfig,
     backend_map: &mut BackendConnectionMap,
     backend_conn_pool_table: &mut BackendConnectionPoolTable,
@@ -54,8 +59,10 @@ pub async fn initialize_clusters(
         for backend in &cluster_cfg.backends {
             let addr = backend.addr;
             let pool_idx = next_pool_idx;
+
             next_pool_idx += 1;
             conn_pools.push((pool_idx, backend.weight));
+
             let mut queue: BackendConnectionPoolQueue = Queue::create(backend.pool_size as u32, 0)?;
             let stats = BackendConnectionPoolStats::default();
             let pb = ProgressBar::new(
@@ -79,7 +86,7 @@ pub async fn initialize_clusters(
                 match res {
                     Ok(stream) => {
                         match register_backend(
-                            tx_event.clone(),
+                            event_tx.clone(),
                             tasks,
                             stream,
                             idx as u32,
@@ -87,7 +94,17 @@ pub async fn initialize_clusters(
                             addr,
                             backend_map,
                         ) {
-                            Ok(cookie) => {
+                            Ok((cookie, abort_handle)) => {
+                                backend_connections.insert(
+                                    cookie,
+                                    BackendConnection {
+                                        abort_handle,
+                                        cluster_idx: idx as u32,
+                                        pool_idx,
+                                        addr,
+                                    },
+                                );
+
                                 if let Err(err) = queue.push(cookie, BPF_EXIST) {
                                     error!("failed to push to queue: {err}");
                                 } else {
@@ -103,7 +120,8 @@ pub async fn initialize_clusters(
                     Err(err) => {
                         error!("failed to connect to backend {addr}: {err}");
                         // TODO: max reconnect attempt limit
-                        let _ = tx_event.send(ManagerEvent::Disconnect {
+                        let _ = event_tx.send(ManagerEvent::Disconnect {
+                            backend_cookie: None,
                             cluster_idx: idx as u32,
                             pool_idx,
                             addr,

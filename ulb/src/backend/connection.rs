@@ -12,13 +12,15 @@ use backoff::{
 use log::{
     debug,
     error,
-    info,
 };
 use tokio::{
     io::AsyncReadExt,
     net::TcpStream,
     sync::mpsc::UnboundedSender,
-    task::JoinSet,
+    task::{
+        AbortHandle,
+        JoinSet,
+    },
 };
 use ulb_common::session::SocketCookie;
 
@@ -32,14 +34,14 @@ use crate::{
 const MAX_RETRY_DURATION: u64 = 30; // sec
 
 pub fn register_backend(
-    tx_event: UnboundedSender<ManagerEvent>,
+    event_tx: UnboundedSender<ManagerEvent>,
     tasks: &mut JoinSet<()>,
     stream: TcpStream,
     cluster_idx: u32,
     pool_idx: u32,
     addr: SocketAddr,
     backend_map: &mut BackendConnectionMap,
-) -> anyhow::Result<SocketCookie> {
+) -> anyhow::Result<(SocketCookie, AbortHandle)> {
     let fd = stream.as_raw_fd();
     let cookie = get_socket_cookie(fd)?;
 
@@ -48,18 +50,20 @@ pub fn register_backend(
         .map_err(|err| anyhow!("failed to insert socket into BACKEND_CONNECTION_MAP: {err}"))?;
 
     let _ = stream.set_nodelay(true);
-    spawn_connection_monitor(tx_event, tasks, stream, cluster_idx, pool_idx, addr);
-    Ok(cookie)
+    let abort_handle =
+        spawn_connection_monitor(event_tx, tasks, stream, cookie, cluster_idx, pool_idx, addr);
+    Ok((cookie, abort_handle))
 }
 
 pub fn spawn_connection_monitor(
-    tx_event: UnboundedSender<ManagerEvent>,
+    event_tx: UnboundedSender<ManagerEvent>,
     tasks: &mut JoinSet<()>,
     mut stream: TcpStream,
+    backend_cookie: SocketCookie,
     cluster_idx: u32,
     pool_idx: u32,
     addr: SocketAddr,
-) {
+) -> AbortHandle {
     tasks.spawn(async move {
         let mut buf = [0u8; 1 << 6];
         loop {
@@ -69,12 +73,13 @@ pub fn spawn_connection_monitor(
 
             if let Ok(0) | Err(_) = res {
                 if let Err(err) = res {
-                    info!("[{addr}] connection closed: {err}");
+                    debug!("[{addr}] connection closed: {err}");
                 } else {
-                    info!("[{addr}] connection closed (eof)");
+                    debug!("[{addr}] connection closed (eof)");
                 }
 
-                let _ = tx_event.send(ManagerEvent::Disconnect {
+                let _ = event_tx.send(ManagerEvent::Disconnect {
+                    backend_cookie: Some(backend_cookie),
                     cluster_idx,
                     pool_idx,
                     addr,
@@ -83,11 +88,11 @@ pub fn spawn_connection_monitor(
                 break;
             }
         }
-    });
+    })
 }
 
 pub fn handle_disconnect(
-    tx_event: UnboundedSender<ManagerEvent>,
+    event_tx: UnboundedSender<ManagerEvent>,
     tasks: &mut JoinSet<()>,
     cluster_idx: u32,
     pool_idx: u32,
@@ -113,7 +118,7 @@ pub fn handle_disconnect(
             Ok(stream) => {
                 if let Ok(cookie) = get_socket_cookie(stream.as_raw_fd()) {
                     let _ = stream.set_nodelay(true);
-                    let _ = tx_event.send(ManagerEvent::Reconnected {
+                    let _ = event_tx.send(ManagerEvent::Reconnected {
                         cluster_idx,
                         pool_idx,
                         addr,

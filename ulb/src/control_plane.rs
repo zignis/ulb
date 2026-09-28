@@ -2,10 +2,7 @@ use std::{
     net::SocketAddr,
     num::NonZero,
     os::unix::io::AsRawFd,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Arc,
     thread::available_parallelism,
 };
 
@@ -16,6 +13,7 @@ use log::{
     info,
     warn,
 };
+use parking_lot::Mutex;
 use tokio::{
     io::AsyncReadExt,
     net::{
@@ -23,6 +21,7 @@ use tokio::{
         TcpSocket,
         TcpStream,
     },
+    sync::mpsc::UnboundedSender,
     task::JoinSet,
 };
 use tokio_util::{
@@ -32,7 +31,11 @@ use tokio_util::{
 use ulb_common::ir::DEFAULT_LISTEN_BACKLOG_QUEUE_SIZE;
 
 use crate::{
-    bpf_bootstrap::ResidualConnectionMap,
+    backend::ManagerEvent,
+    bpf_bootstrap::{
+        ResidualConnectionMap,
+        SessionMap,
+    },
     config::canonical::{
         ClusterConfig,
         UlbConfig,
@@ -50,6 +53,8 @@ pub struct ControlPlane {
     connection_tracker: TaskTracker,
     residual_connection_map: Arc<Mutex<ResidualConnectionMap>>,
     clusters: Arc<Vec<ClusterConfig>>,
+    session_map: Arc<Mutex<SessionMap>>,
+    event_tx: UnboundedSender<ManagerEvent>,
 }
 
 impl ControlPlane {
@@ -57,6 +62,8 @@ impl ControlPlane {
         shutdown_token: CancellationToken,
         residual_connection_map: ResidualConnectionMap,
         clusters: Arc<Vec<ClusterConfig>>,
+        session_map: SessionMap,
+        event_tx: UnboundedSender<ManagerEvent>,
     ) -> Self {
         Self {
             listener_tasks: JoinSet::new(),
@@ -64,6 +71,8 @@ impl ControlPlane {
             connection_tracker: TaskTracker::new(),
             residual_connection_map: Arc::new(Mutex::new(residual_connection_map)),
             clusters,
+            session_map: Arc::new(Mutex::new(session_map)),
+            event_tx,
         }
     }
 
@@ -83,6 +92,8 @@ impl ControlPlane {
                 let residual_connection_map = self.residual_connection_map.clone();
                 let clusters = self.clusters.clone();
                 let connection_tracker = self.connection_tracker.clone();
+                let session_map = self.session_map.clone();
+                let event_tx = self.event_tx.clone();
 
                 self.listener_tasks.spawn(async move {
                     loop {
@@ -94,6 +105,8 @@ impl ControlPlane {
                                     clusters.clone(),
                                     shutdown_token.clone(),
                                     connection_tracker.clone(),
+                                    session_map.clone(),
+                                    event_tx.clone(),
                                 );
                             }
 
@@ -126,6 +139,8 @@ fn handle_connection(
     clusters: Arc<Vec<ClusterConfig>>,
     task_shutdown: CancellationToken,
     connection_tracker: TaskTracker,
+    session_map: Arc<Mutex<SessionMap>>,
+    event_tx: UnboundedSender<ManagerEvent>,
 ) {
     connection_tracker.spawn(async move {
         let _ = stream.set_nodelay(true);
@@ -142,26 +157,28 @@ fn handle_connection(
             () = task_shutdown.cancelled() => return,
             res = stream.peek(&mut peek_buf) => {
                 if let Ok(0) | Err(_) = res {
+                    if let Ok(target) = session_map.lock().get(&cookie, 0) {
+                        let backend_cookie = target.cookie;
+                        debug!("client CK:{cookie} disconnected, terminating backend CK:{backend_cookie}");
+                        let _ = event_tx.send(ManagerEvent::TerminateSession(backend_cookie));
+                    }
+
                     return;
                 }
             }
         }
 
         // is this a resident connection?
-        let resident_data = match residual_connection_map.lock() {
-            Ok(mut map) => match map.get(&cookie, 0) {
+        let resident_data = {
+            let mut map = residual_connection_map.lock();
+            match map.get(&cookie, 0) {
                 Ok(data) => {
                     if let Err(err) = map.remove(&cookie) {
                         debug!("failed to remove cookie from resident map: {err}");
                     }
-
                     Some(data)
                 }
                 Err(_) => None,
-            },
-            Err(err) => {
-                error!("`residual_connection_map` lock poisoned: {err}");
-                return;
             }
         };
 
@@ -185,12 +202,12 @@ fn handle_connection(
             return;
         }
 
-        let mut buf = [0u8; 1 << 6];
+        let mut sink = [0u8; 1 << 6];
         loop {
             tokio::select! {
                 () = task_shutdown.cancelled() => break,
-                // either an eof (TCP FIN) or stray payload that must be drained
-                res = stream.read(&mut buf) => {
+                // stray payload that must be drained
+                res = stream.read(&mut sink) => {
                     if let Ok(0) | Err(_) = res {
                         break;
                     }
