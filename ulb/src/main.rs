@@ -112,6 +112,8 @@ async fn main() -> anyhow::Result<()> {
         shutdown_token.clone(),
         bpf.residual_connection_map,
         Arc::new(cfg.clusters.clone()),
+        bpf.session_map,
+        backend_manager.get_event_tx(),
     );
 
     control_plane.start(&cfg)?;
