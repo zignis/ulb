@@ -12,9 +12,9 @@ pub struct SessionTarget {
 
 #[repr(u32)]
 #[derive(Debug)]
-enum Flag {
-    UpdateActiveConnections = 1 << 0,
-    IsBackendCookie         = 1 << 1,
+enum FlagMask {
+    NeedsConnectionUpdate = 1 << 0,
+    IsBackendCookie       = 1 << 1,
 }
 
 impl SessionTarget {
@@ -22,17 +22,17 @@ impl SessionTarget {
     pub fn new(
         cookie: SocketCookie,
         pool_idx: u32,
-        update_active_connections: bool,
+        needs_connection_update: bool,
         is_backend_cookie: bool,
     ) -> Self {
         let mut flags = 0;
 
-        if update_active_connections {
-            flags |= Flag::UpdateActiveConnections as u32;
+        if needs_connection_update {
+            flags |= FlagMask::NeedsConnectionUpdate as u32;
         }
 
         if is_backend_cookie {
-            flags |= Flag::IsBackendCookie as u32;
+            flags |= FlagMask::IsBackendCookie as u32;
         }
 
         Self {
@@ -43,15 +43,17 @@ impl SessionTarget {
     }
 
     #[inline(always)]
-    pub fn update_active_connections(&self) -> bool {
-        (self.flags & Flag::UpdateActiveConnections as u32) != 0
+    pub fn needs_connection_update(&self) -> bool {
+        (self.flags & FlagMask::NeedsConnectionUpdate as u32) != 0
     }
 
     #[inline(always)]
     pub fn is_backend_cookie(&self) -> bool {
-        (self.flags & Flag::IsBackendCookie as u32) != 0
+        (self.flags & FlagMask::IsBackendCookie as u32) != 0
     }
 }
+
+//
 
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone)]
