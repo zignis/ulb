@@ -33,8 +33,7 @@ use tokio::{
     task,
 };
 use ulb_common::{
-    JMP_PROG_HEADER_PARSER,
-    JMP_PROG_ROUTER,
+    JmpProg,
     http::HTTP_HDR_KEY_MAX_LEN,
     ir::{
         BackendConnectionPoolStats,
@@ -167,10 +166,10 @@ pub fn bootstrap_bpf(
     router.load()?;
 
     jmp_table.set(
-        JMP_PROG_ROUTER,
+        JmpProg::Router as u32,
         router
             .fd()
-            .map_err(|_| anyhow!("failed to set `JMP_PROG_ROUTER`"))?,
+            .map_err(|_| anyhow!("failed to set route tail prog"))?,
         0,
     )?;
 
@@ -181,10 +180,10 @@ pub fn bootstrap_bpf(
     header_parser.load()?;
 
     jmp_table.set(
-        JMP_PROG_HEADER_PARSER,
+        JmpProg::HdrParser as u32,
         header_parser
             .fd()
-            .map_err(|_| anyhow!("failed to set `JMP_PROG_HEADER_PARSER`"))?,
+            .map_err(|_| anyhow!("failed to set header parser tail prog"))?,
         0,
     )?;
 

@@ -1,4 +1,7 @@
 #![no_std]
+#![feature(variant_count)]
+
+use core::mem::variant_count;
 
 #[cfg(feature = "user")]
 extern crate alloc;
@@ -9,9 +12,10 @@ pub mod ir;
 pub mod session;
 pub mod utils;
 
-// total programs available for tail call
-pub const JMP_PROG_COUNT: u32 = 2;
+#[repr(u32)]
+pub enum JmpProg {
+    Router,
+    HdrParser,
+}
 
-// prog idx for tail calls
-pub const JMP_PROG_ROUTER: u32 = 0;
-pub const JMP_PROG_HEADER_PARSER: u32 = 1;
+pub const JMP_PROG_COUNT: u32 = variant_count::<JmpProg>() as u32;
