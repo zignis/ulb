@@ -9,7 +9,7 @@ def main():
         sys.exit(1)
 
     lb_name = sys.argv[1]
-    clients = [500, 1000, 2000, 5000, 10000, 15000, 20000, 25000, 30000]
+    clients = [500, 1000, 2000, 5000, 7500, 10000, 12500, 15000]
     fixed = {
         "--think-time": "0.2",
         "--keep-alive": "true",

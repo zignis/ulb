@@ -8,7 +8,7 @@ def main():
         sys.exit(1)
 
     lb_name = sys.argv[1]
-    rps_list = [500, 1000, 2500, 5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000]
+    rps_list = [500, 1000, 2500, 5000, 10000, 15000, 20000, 25000]
 
     run_benchmark(
         lb_name=lb_name,
