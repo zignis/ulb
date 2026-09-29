@@ -6,7 +6,7 @@ use aya_ebpf::{
         BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB,
         BPF_SOCK_OPS_STATE_CB,
         BPF_SOCK_OPS_STATE_CB_FLAG,
-        BPF_TCP_CLOSE,
+        BPF_TCP_ESTABLISHED,
     },
     cty::c_void,
     helpers::{
@@ -80,7 +80,9 @@ fn ulb_sock_ops(ctx: SockOpsContext) -> u32 {
 
         // remove mapping from SESSION_MAP when backend disconnects (`remove_session_mapping`
         // ignores client cookies)
-        BPF_SOCK_OPS_STATE_CB if matches!(ctx.arg(1), BPF_TCP_CLOSE) => {
+        BPF_SOCK_OPS_STATE_CB
+            if ctx.arg(0) == BPF_TCP_ESTABLISHED && ctx.arg(1) != BPF_TCP_ESTABLISHED =>
+        {
             let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut c_void) } as SocketCookie;
             remove_session_mapping(&cookie);
         }
