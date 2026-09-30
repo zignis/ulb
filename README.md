@@ -1,6 +1,6 @@
 <div align="center">
   <img width="36" alt="ulb icon" align="left" src="./assets/logo.svg" />
-  <div align="left"><h1>μlb</h1></div>
+  <div align="left"><h1>μLB</h1></div>
 </div>
 
 ## Prerequisites
