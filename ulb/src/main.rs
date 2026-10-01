@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     println!(
-        "launching µlb v{}.{}",
+        "launching µLB v{}.{}",
         env!("CARGO_PKG_VERSION_MAJOR"),
         env!("CARGO_PKG_VERSION_MINOR")
     );
