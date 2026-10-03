@@ -1,7 +1,7 @@
-<div align="center">
-  <img width="36" alt="ulb icon" align="left" src="./assets/logo.svg" />
-  <div align="left"><h1>μLB</h1></div>
-</div>
+| <img src="./assets/logo.svg" alt="µLB logo" width="74" align="left" /> | <p align="left">µLB (pronounced "micro LB") is a lightweight, <br/>high-performance HTTP/1 load balancer powered <br/>by eBPF</p> |
+|------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+
+<br />
 
 ## Prerequisites
 
