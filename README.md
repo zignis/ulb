@@ -1,5 +1,11 @@
-| <img src="./assets/logo.svg" alt="µLB logo" width="74" align="left" /> | <p align="left">µLB (pronounced "micro LB") is a lightweight, <br/>high-performance HTTP/1 load balancer powered <br/>by eBPF</p> |
-|------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+<table align="center">
+  <tr>
+    <th width="86">
+      <img src="./assets/logo.svg" alt="µLB logo" width="64" align="left" />
+    </th>
+    <th width="360" align="left">µLB (pronounced "micro LB") is a lightweight, high-performance HTTP/1 load balancer powered by eBPF</th>
+  </tr>
+</table>
 
 <br />
 
